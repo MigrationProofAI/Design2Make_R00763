@@ -3,7 +3,8 @@ REM Design2Make launcher - Windows. Starts planning MCP :8001, prod-version MCP 
 REM Auto-installs uv if missing, then runs EVERYTHING through `uv run` (RFC servers get their deps too).
 REM No pyrfc needed - the RFC servers call the NWRFC SDK directly via ctypes.
 REM NOTE: the bundled NWRFC SDK is the LINUX build. On Windows the RFC servers need the WINDOWS
-REM       NWRFC SDK (.dll) in mcp_remote\nwrfcsdk\. The app (:8000) runs without it.
+REM       NWRFC SDK (.dll) in mcp_remote\nwrfcsdk\ - until then the :8001/:8002 windows will error
+REM       on the SDK; that is expected. The app (:8000) runs fine without them.
 
 cd /d "%~dp0"
 
@@ -30,9 +31,9 @@ set "SAPNWRFC_HOME=%CD%\mcp_remote\nwrfcsdk"
 set "PATH=%SAPNWRFC_HOME%\lib;%PATH%"
 
 echo Starting planning MCP on :8001 ...
-start "D2M planning :8001" cmd /k "cd /d %CD%\mcp_remote ^&^& set MCP_PORT=8001 ^&^& uv run python sap_planning_mcp.py"
+start "D2M planning :8001" /D "%CD%\mcp_remote" cmd /k "set MCP_PORT=8001&& uv run python sap_planning_mcp.py"
 echo Starting prod-version MCP on :8002 ...
-start "D2M prodvers :8002" cmd /k "cd /d %CD%\mcp_remote ^&^& set MCP_PORT=8002 ^&^& uv run python sap_prodvers_mcp.py"
+start "D2M prodvers :8002" /D "%CD%\mcp_remote" cmd /k "set MCP_PORT=8002&& uv run python sap_prodvers_mcp.py"
 
 timeout /t 3 /nobreak >/dev/null
 echo Starting app on http://localhost:8000 ...
