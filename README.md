@@ -8,15 +8,17 @@ disassembled product, or speak/type), creates the whole master-data set (finishe
 purchase-info-records, costs, BOM, routing, production version), runs MRP, convenes a grounded expert
 board, and self-corrects — every write gated by an explicit, voice-or-click approval.
 
-> ⚠️ **Security:** never commit `.env` files or the SAP **NWRFC SDK** (licensed, not redistributable).
-> Both are gitignored. The app holds **no SAP credentials** — it only knows the two remote MCP URLs.
+> 🔒 **Private repo.** The SAP **NWRFC SDK** is bundled (`mcp_remote/nwrfcsdk/`) for the owner's own
+> cross-machine use — it is SAP-licensed, so **keep this repository private** (don't redistribute).
+> All `.env` files (SAP + OpenAI credentials) are gitignored and never committed; the app itself
+> holds no SAP creds — it only knows the two remote MCP URLs.
 
 ---
 
 ## Architecture
 
 ```
-┌─ app/ (this repo root) ── FastAPI + ADK, :8000 ──────────────────────────┐
+┌─ app (this repo root) ── FastAPI + ADK, :8000 ───────────────────────────┐
 │   React UI (served from static_v2/)                                       │
 │   local stdio MCP servers (mcp_server/): sap · make · vector · graph ·    │
 │       genesis · assurance · serper · cocktail   (OData REST, no RFC)       │
@@ -33,6 +35,7 @@ board, and self-corrects — every write gated by an explicit, voice-or-click ap
 
 ```
 Design2Make_R00763/
+├── run.sh / run.bat        ONE-COMMAND launch: RFC :8001 + :8002 + app :8000
 ├── main.py                 FastAPI app + ADK runner (:8000)
 ├── mcp_server/             local stdio MCP servers (OData REST)
 ├── frontend/               React (Vite) source
@@ -41,7 +44,7 @@ Design2Make_R00763/
 ├── env.example             copy → .env (app) and mcp_remote/.env (RFC)
 └── mcp_remote/             the two RFC MCP servers (:8001 / :8002)
     ├── sap_planning_mcp.py · sap_prodvers_mcp.py · rfc_*.py
-    └── nwrfcsdk/           (NOT in repo — download the SAP NWRFC SDK here)
+    └── nwrfcsdk/           SAP NWRFC SDK — bundled (LINUX build; private repo)
 ```
 
 ---
@@ -49,37 +52,44 @@ Design2Make_R00763/
 ## Prerequisites
 - **Python 3.13** and [`uv`](https://docs.astral.sh/uv/) (`pip install uv`).
 - An **OpenAI API key** (LLMs + embeddings + TTS).
-- For the RFC servers only: access to an **SAP system over RFC**, the **SAP NWRFC SDK**, and `pyrfc`.
-- (Optional) **Node 18+** if you want to rebuild the React UI; not needed to run (the bundle is committed).
+- For the RFC servers: access to an **SAP system over RFC** + `pyrfc`. The NWRFC SDK is **bundled**
+  (`mcp_remote/nwrfcsdk/`, **Linux** `.so` build) — so run on **Linux / WSL / Docker / a Linux VM**.
+  On a **Windows** host, replace that folder with the Windows NWRFC SDK (`.dll`s).
+- (Optional) **Node 18+** to rebuild the React UI; not needed to run (the bundle is committed).
 
 ## Setup
 
 ```bash
-# 1. App
-cp env.example .env            # fill OPENAI_API_KEY + the local SAP OData (sap.py/make.py) values
-uv sync                        # install Python deps
-
-# 2. Remote RFC servers (only if you run planning / production-version)
-cp env.example mcp_remote/.env # fill the SAP_RFC_* values (system, client, user, password)
-# Download the SAP NWRFC SDK (SAP Support Portal, licensed) and unzip it to:
-#   mcp_remote/nwrfcsdk/
-# then: pip install pyrfc   (builds against the SDK)
+git clone <this repo> && cd Design2Make_R00763
+cp env.example .env              # OPENAI_API_KEY + the local SAP OData (sap.py/make.py) values
+cp env.example mcp_remote/.env   # the SAP_RFC_* values (host, system, client, user, password)
+uv sync                          # install Python deps
+pip install pyrfc                # RFC servers only — builds against mcp_remote/nwrfcsdk/
 ```
+
+The two `.env` files are the **only** manual step — credentials are never in the repo.
 
 ## Run
 
 ```bash
-# (a) start the two RFC servers — each in its own shell (needs the SDK + RFC creds)
-cd mcp_remote && MCP_PORT=8001 python sap_planning_mcp.py
-cd mcp_remote && MCP_PORT=8002 python sap_prodvers_mcp.py
-
-# (b) start the app
-uv run main.py                 # → http://localhost:8000
+./run.sh        # Linux / WSL / Docker — starts :8001, :8002, and :8000; Ctrl+C stops all three
+# run.bat       # Windows equivalent (needs the Windows NWRFC SDK)
 ```
 
-Open `http://localhost:8000`. The app connects to the RFC servers via `PLANNING_MCP_URL` /
+Then open **http://localhost:8000**. The app connects to the RFC servers via `PLANNING_MCP_URL` /
 `PRODVER_MCP_URL` (defaults `:8001` / `:8002`). Search, genesis, the board, the tour/demo and screen
-recording all work without the RFC servers; only **MRP / demand / production-version** need them.
+recording all work **without** the RFC servers; only **MRP / demand / production-version** need them.
+
+<details><summary>Start things by hand instead of <code>run.sh</code></summary>
+
+```bash
+export SAPNWRFC_HOME="$PWD/mcp_remote/nwrfcsdk"
+export LD_LIBRARY_PATH="$SAPNWRFC_HOME/lib:$LD_LIBRARY_PATH"
+( cd mcp_remote && MCP_PORT=8001 python sap_planning_mcp.py ) &
+( cd mcp_remote && MCP_PORT=8002 python sap_prodvers_mcp.py ) &
+uv run main.py
+```
+</details>
 
 ### Rebuild the UI (optional)
 ```bash
