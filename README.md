@@ -80,6 +80,23 @@ all work **without** the RFC servers; only **MRP / demand / production-version**
 > `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` (Windows) or
 > `curl -LsSf https://astral.sh/uv/install.sh | sh` (Linux) — then `uv sync` works.
 
+## Try it — build a laptop's master data
+
+With `:8000` open, paste this into the chat to **genesis** the ASUS ROG Laptop — a FERT plus 10 bought
+components, each with a PIR + cost, then the BOM, routing, and production version — with per-component
+cost prices:
+
+> Build the full ASUS ROG Laptop assembly in plant 1710 as ONE genesis run, with these component
+> costs in the spec (all bought from vendor 17300001, qty 1 each): Panel Kit 120, Keyboard 35,
+> CD-ROM 18, Motherboard 240, USB/MB Cable 6, USB Board 22, Left Cooling Fan 14, Right Cooling Fan 14,
+> Audio Board 19, Power Board 28. Show me the preview, then I'll confirm.
+
+It returns a **preview** (nothing written) — review the Genesis card on the right, then reply
+**"yes, confirm creation"** (or click the approval gate). Any component that already exists by meaning
+(semantic match ≥ 0.92) is **reused** instead of re-created. Prices use the default currency
+(`SAP_CURRENCY`); add e.g. *"in GBP"* to force one. Genesis runs over **OData** (no RFC) — only the
+final production-version bind uses `:8002`. Afterwards you can ask it to **run MRP** on the new FERT.
+
 <details><summary>Start things by hand instead of <code>run.sh</code></summary>
 
 ```bash
