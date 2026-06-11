@@ -1,0 +1,26 @@
+{
+  "_note": "Work-center CODE -> SAP internal id (CRHD Object ID), per plant. The routing API accepts ONLY WorkCenterInternalID ('Property WorkCenter is invalid') and the work-center master OData is 403 on this appliance -- so this maintained map lets users/agents say 'PACK01' or 'packaging' and the tool fills the internal id. Lifted from the May_2026/Design2Make WORK_CENTER_IDS map (plant 1710, from CRHD); PACK01->10000002 independently re-verified from live routing operations. desc/aliases added for the common ones so name lookups work too.",
+  "1710": [
+    {"work_center": "PACK01", "internal_id": "10000002", "desc": "Packaging", "aliases": ["packaging", "pack", "package"]},
+    {"work_center": "ASSEMBLY", "internal_id": "10000000", "desc": "Assembly", "aliases": ["assembly", "assemble", "assy", "sensor integration", "connectivity install"]},
+    {"work_center": "TESTING", "internal_id": "10000001", "desc": "Testing", "aliases": ["testing", "test", "functional test"]},
+    {"work_center": "MEASSY", "internal_id": "10000057", "desc": "PCB / mechanical assembly", "aliases": ["pcb assembly", "pcb", "meassy"]},
+    {"work_center": "QMLABS", "internal_id": "10000016", "desc": "Quality lab (calibration, final QC)", "aliases": ["qmlabs", "calibration", "final qc", "qc", "quality"]},
+    {"work_center": "WORK", "internal_id": "10000011", "desc": "General work (power, firmware, final work)", "aliases": ["work", "firmware flash", "power & protection", "final work", "inspection"]},
+    {"work_center": "TECHNIC", "internal_id": "10000010", "desc": "Mechanical processing", "aliases": ["technic", "mechanical", "machining", "mechanical processing"]},
+    {"work_center": "WINDING", "internal_id": "10000004", "desc": "Winding", "aliases": ["winding"]},
+    {"work_center": "PACK02", "internal_id": "10000003", "desc": "Packaging 2", "aliases": []},
+    {"work_center": "PACKING", "internal_id": "10000012", "desc": "Packing", "aliases": ["packing"]},
+    {"work_center": "ASSPKG", "internal_id": "10000056", "desc": "Assembly & packaging", "aliases": ["asspkg"]},
+    {"work_center": "FINICLN", "internal_id": "10000055", "desc": "Finishing / cleaning", "aliases": ["finicln", "finishing"]},
+    {"work_center": "BODYSHOP", "internal_id": "10000094", "desc": "Body shop", "aliases": ["bodyshop", "body shop"]},
+    {"work_center": "BOTTLING", "internal_id": "10000005", "desc": "Bottling", "aliases": ["bottling"]},
+    {"work_center": "MIXING", "internal_id": "10000006", "desc": "Mixing", "aliases": ["mixing"]},
+    {"work_center": "FIN1", "internal_id": "10000017", "desc": "Finishing 1", "aliases": []},
+    {"work_center": "FIN2", "internal_id": "10000018", "desc": "Finishing 2", "aliases": []},
+    {"work_center": "SUB1", "internal_id": "10000019", "desc": "Sub-assembly 1", "aliases": []},
+    {"work_center": "PRE1", "internal_id": "10000020", "desc": "Pre-assembly 1", "aliases": []},
+    {"work_center": "TURNING1", "internal_id": "10000052", "desc": "Turning 1", "aliases": ["turning"]},
+    {"work_center": "DRILING", "internal_id": "10000054", "desc": "Drilling", "aliases": ["drilling"]}
+  ]
+}

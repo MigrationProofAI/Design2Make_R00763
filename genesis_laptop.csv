@@ -1,0 +1,13 @@
+role,name,material,description,type,vendor,price,quantity,unit
+parent,ASUS ROG Laptop,,ASUS ROG Gaming Laptop,FERT,,,1,EA
+bought,Panel Kit,,Panel Kit (lid/screen housing),HAWA,17300001,45,1,EA
+bought,Keyboard,,Keyboard Assembly,HAWA,17300001,25,1,EA
+bought,Base Sub-assembly,,Base Sub-assembly chassis,HAWA,17300001,60,1,EA
+bought,CD-ROM,,CD-ROM optical drive,HAWA,17300002,18,1,EA
+bought,Motherboard,,Motherboard,HAWA,17300001,180,1,EA
+bought,USB MB Cable,,USB to motherboard cable,HAWA,17300002,5,1,EA
+bought,USB board,,USB board,HAWA,17300002,12,1,EA
+bought,Left Cooling Fan,,Left cooling fan,HAWA,17300001,15,1,EA
+bought,Right Cooling Fan,,Right cooling fan,HAWA,17300001,15,1,EA
+bought,Audio Board,,Audio board,HAWA,17300002,10,1,EA
+bought,Power Board,,Power board,HAWA,17300001,22,1,EA

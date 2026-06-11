@@ -1,0 +1,308 @@
+{
+  "nodes": [
+    {
+      "id": "ROH",
+      "kind": "material_type",
+      "name": "Raw material",
+      "valuation_class": "3000",
+      "procurement": "external (F)"
+    },
+    {
+      "id": "HALB",
+      "kind": "material_type",
+      "name": "Semi-finished",
+      "valuation_class": "7900",
+      "procurement": "in-house (E)"
+    },
+    {
+      "id": "FERT",
+      "kind": "material_type",
+      "name": "Finished product",
+      "valuation_class": "7920",
+      "procurement": "in-house (E)"
+    },
+    {
+      "id": "HAWA",
+      "kind": "material_type",
+      "name": "Trading good",
+      "valuation_class": "3100",
+      "procurement": "external (F)"
+    },
+    {
+      "id": "VERP",
+      "kind": "material_type",
+      "name": "Packaging",
+      "valuation_class": "3000",
+      "procurement": "external (F)"
+    },
+    {
+      "id": "BasicData",
+      "kind": "view"
+    },
+    {
+      "id": "Purchasing",
+      "kind": "view"
+    },
+    {
+      "id": "MRP",
+      "kind": "view"
+    },
+    {
+      "id": "Sales",
+      "kind": "view"
+    },
+    {
+      "id": "Valuation",
+      "kind": "view"
+    },
+    {
+      "id": "WorkScheduling",
+      "kind": "view"
+    },
+    {
+      "id": "StorageLocation",
+      "kind": "view"
+    },
+    {
+      "id": "SupplyPlanning",
+      "kind": "view"
+    },
+    {
+      "id": "BOM",
+      "kind": "object"
+    },
+    {
+      "id": "Routing",
+      "kind": "object"
+    },
+    {
+      "id": "PIR",
+      "kind": "object"
+    },
+    {
+      "id": "SourceList",
+      "kind": "object"
+    },
+    {
+      "id": "TaxClassification",
+      "kind": "object"
+    },
+    {
+      "id": "SalesOrg",
+      "kind": "org_concept"
+    },
+    {
+      "id": "DistributionChannel",
+      "kind": "org_concept"
+    },
+    {
+      "id": "Plant",
+      "kind": "org_concept"
+    },
+    {
+      "id": "CompanyCode",
+      "kind": "org_concept"
+    },
+    {
+      "id": "Country",
+      "kind": "org_concept"
+    }
+  ],
+  "edges": [
+    {
+      "source": "ROH",
+      "target": "BasicData",
+      "relation": "has_view"
+    },
+    {
+      "source": "ROH",
+      "target": "Valuation",
+      "relation": "has_view"
+    },
+    {
+      "source": "ROH",
+      "target": "MRP",
+      "relation": "has_view"
+    },
+    {
+      "source": "ROH",
+      "target": "Purchasing",
+      "relation": "has_view"
+    },
+    {
+      "source": "ROH",
+      "target": "PIR",
+      "relation": "requires"
+    },
+    {
+      "source": "ROH",
+      "target": "SourceList",
+      "relation": "requires"
+    },
+    {
+      "source": "HALB",
+      "target": "BasicData",
+      "relation": "has_view"
+    },
+    {
+      "source": "HALB",
+      "target": "Valuation",
+      "relation": "has_view"
+    },
+    {
+      "source": "HALB",
+      "target": "MRP",
+      "relation": "has_view"
+    },
+    {
+      "source": "HALB",
+      "target": "BOM",
+      "relation": "requires"
+    },
+    {
+      "source": "HALB",
+      "target": "Routing",
+      "relation": "requires"
+    },
+    {
+      "source": "HALB",
+      "target": "WorkScheduling",
+      "relation": "has_view"
+    },
+    {
+      "source": "FERT",
+      "target": "BasicData",
+      "relation": "has_view"
+    },
+    {
+      "source": "FERT",
+      "target": "Valuation",
+      "relation": "has_view"
+    },
+    {
+      "source": "FERT",
+      "target": "MRP",
+      "relation": "has_view"
+    },
+    {
+      "source": "FERT",
+      "target": "Sales",
+      "relation": "has_view"
+    },
+    {
+      "source": "FERT",
+      "target": "BOM",
+      "relation": "requires"
+    },
+    {
+      "source": "FERT",
+      "target": "Routing",
+      "relation": "requires"
+    },
+    {
+      "source": "FERT",
+      "target": "WorkScheduling",
+      "relation": "has_view"
+    },
+    {
+      "source": "HAWA",
+      "target": "BasicData",
+      "relation": "has_view"
+    },
+    {
+      "source": "HAWA",
+      "target": "Valuation",
+      "relation": "has_view"
+    },
+    {
+      "source": "HAWA",
+      "target": "MRP",
+      "relation": "has_view"
+    },
+    {
+      "source": "HAWA",
+      "target": "Sales",
+      "relation": "has_view"
+    },
+    {
+      "source": "HAWA",
+      "target": "Purchasing",
+      "relation": "has_view"
+    },
+    {
+      "source": "HAWA",
+      "target": "PIR",
+      "relation": "requires"
+    },
+    {
+      "source": "VERP",
+      "target": "BasicData",
+      "relation": "has_view"
+    },
+    {
+      "source": "VERP",
+      "target": "Valuation",
+      "relation": "has_view"
+    },
+    {
+      "source": "VERP",
+      "target": "MRP",
+      "relation": "has_view"
+    },
+    {
+      "source": "VERP",
+      "target": "Purchasing",
+      "relation": "has_view"
+    },
+    {
+      "source": "VERP",
+      "target": "PIR",
+      "relation": "requires"
+    },
+    {
+      "source": "Purchasing",
+      "target": "PIR",
+      "relation": "enabled_by"
+    },
+    {
+      "source": "MRP",
+      "target": "StorageLocation",
+      "relation": "needs"
+    },
+    {
+      "source": "Sales",
+      "target": "TaxClassification",
+      "relation": "requires"
+    },
+    {
+      "source": "Sales",
+      "target": "SalesOrg",
+      "relation": "needs"
+    },
+    {
+      "source": "Sales",
+      "target": "DistributionChannel",
+      "relation": "needs"
+    },
+    {
+      "source": "Routing",
+      "target": "WorkScheduling",
+      "relation": "requires"
+    },
+    {
+      "source": "SalesOrg",
+      "target": "DistributionChannel",
+      "relation": "sells_through"
+    },
+    {
+      "source": "Plant",
+      "target": "CompanyCode",
+      "relation": "in"
+    },
+    {
+      "source": "CompanyCode",
+      "target": "Country",
+      "relation": "in"
+    }
+  ]
+}

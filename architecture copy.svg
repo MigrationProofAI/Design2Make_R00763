@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 988" font-family="Segoe UI, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker>
+    <marker id="arrl" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#cbd5e1"/></marker>
+    <marker id="arrb" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#a78bfa"/></marker>
+  </defs>
+  <rect width="1040" height="988" fill="#f8fafc"/>
+  <text x="520" y="26" text-anchor="middle" font-size="19" font-weight="700" fill="#0f172a">Architecture — agents · MCP tools · the Brain</text>
+  <rect x="892" y="40" width="108" height="26" rx="13" fill="#1d4ed8"/>
+  <text x="946" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">8 agents</text>
+
+  <!-- Router -->
+  <rect x="405" y="40" width="230" height="38" rx="19" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+  <text x="520" y="64" text-anchor="middle" font-size="14" font-weight="700" fill="#5b21b6">🧭 ROUTER</text>
+  <text x="520" y="94" text-anchor="middle" font-size="11" fill="#7c3aed">classify_intent() — an LLM classifier function, NOT an ADK Agent</text>
+  <line x1="498" y1="78" x2="150" y2="150" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <line x1="520" y1="94" x2="407" y2="118" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <line x1="542" y1="78" x2="788" y2="118" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+
+  <!-- Search -->
+  <text x="147" y="138" text-anchor="middle" font-size="10.5" fill="#64748b">single agent</text>
+  <rect x="40" y="150" width="214" height="46" rx="9" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="147" y="170" text-anchor="middle" font-size="14" font-weight="700" fill="#1e3a8a">🤖 Search</text>
+  <text x="147" y="187" text-anchor="middle" font-size="10.5" fill="#334155">read-only · sap·vector·graph·web</text>
+
+  <!-- Create/Change -->
+  <rect x="290" y="118" width="236" height="218" rx="10" fill="#fff" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="298" y="134" font-size="11" font-style="italic" fill="#475569">CreatePipeline · SequentialAgent</text>
+  <rect x="303" y="148" width="210" height="40" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="408" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 Intake</text>
+  <line x1="408" y1="188" x2="408" y2="206" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <rect x="303" y="208" width="210" height="40" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="408" y="232" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 ValidateEnrich</text>
+  <line x1="408" y1="248" x2="408" y2="266" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <rect x="303" y="268" width="210" height="40" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="408" y="292" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 Writer</text>
+
+  <!-- Rule Engine -->
+  <rect x="560" y="118" width="452" height="332" rx="10" fill="#fff" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="568" y="134" font-size="11" font-style="italic" fill="#475569">MaterialRuleEngine · SequentialAgent</text>
+  <rect x="575" y="148" width="200" height="38" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="675" y="171" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 Derive</text>
+  <line x1="675" y1="186" x2="675" y2="206" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <rect x="570" y="206" width="434" height="234" rx="9" fill="#fbfcff" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="578" y="222" font-size="11" font-style="italic" fill="#475569">Validate · ParallelAgent  (CodeCheck ‖ Loop)</text>
+  <rect x="585" y="238" width="172" height="58" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="671" y="263" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 CodeCheck</text>
+  <text x="671" y="281" text-anchor="middle" font-size="10" fill="#334155">coded-value validity</text>
+  <text x="772" y="276" text-anchor="middle" font-size="22" fill="#94a3b8">‖</text>
+  <rect x="790" y="234" width="208" height="198" rx="9" fill="#fbfcff" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="798" y="250" font-size="11" font-style="italic" fill="#475569">PolicyCritiqueLoop · LoopAgent ≤3</text>
+  <rect x="800" y="262" width="188" height="40" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="894" y="286" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 PolicyCheck</text>
+  <line x1="876" y1="302" x2="876" y2="356" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <line x1="912" y1="356" x2="912" y2="302" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <text x="945" y="332" font-size="10" fill="#64748b">↻</text>
+  <rect x="800" y="356" width="188" height="40" rx="8" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="894" y="380" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">🤖 Critic</text>
+
+  <!-- agents converge onto the MCP layer (outer box) -->
+  <text x="520" y="468" text-anchor="middle" font-size="12" font-weight="700" fill="#0284c7">MCP ↕  agents reach tools through this layer  ·  5 servers · 25 tools</text>
+  <rect x="32" y="476" width="976" height="170" rx="11" fill="none" stroke="#0ea5e9" stroke-width="1.6"/>
+  <line x1="150" y1="196" x2="500" y2="476" stroke="#cbd5e1" stroke-width="1.3" marker-end="url(#arrl)"/>
+  <line x1="408" y1="336" x2="516" y2="476" stroke="#cbd5e1" stroke-width="1.3" marker-end="url(#arrl)"/>
+  <line x1="785" y1="450" x2="534" y2="476" stroke="#cbd5e1" stroke-width="1.3" marker-end="url(#arrl)"/>
+
+  <!-- MCP servers with tools -->
+  <rect x="40" y="486" width="300" height="150" rx="9" fill="#e0f2fe" stroke="#0ea5e9"/>
+  <text x="52" y="506" font-size="13" font-weight="700" fill="#075985">🗄 sap · 13</text>
+  <text x="52" y="524" font-size="9" fill="#334155">search_materials · get_material · list_materials</text>
+  <text x="52" y="538" font-size="9" fill="#334155">query_sap · list_plants · describe_search_fields</text>
+  <text x="52" y="552" font-size="9" fill="#334155">list_allowed_values · find_field · list_fields</text>
+  <text x="52" y="566" font-size="9" fill="#334155">build_material_payload</text>
+  <text x="52" y="584" font-size="9" font-weight="700" fill="#b45309">create_material · update_material · change_material_view  (writes)</text>
+  <text x="52" y="606" font-size="9" fill="#64748b">writes → Writer only (tool_filter), preview→confirm gated</text>
+
+  <rect x="356" y="486" width="150" height="150" rx="9" fill="#e0f2fe" stroke="#0ea5e9"/>
+  <text x="368" y="506" font-size="13" font-weight="700" fill="#075985">🔢 vector · 2</text>
+  <text x="368" y="526" font-size="9.5" fill="#334155">index_materials</text>
+  <text x="368" y="540" font-size="9.5" fill="#334155">semantic_search</text>
+  <text x="368" y="560" font-size="9" fill="#64748b">FAISS + OpenAI</text>
+  <text x="368" y="572" font-size="9" fill="#64748b">embeddings</text>
+
+  <rect x="522" y="486" width="170" height="150" rx="9" fill="#e0f2fe" stroke="#0ea5e9"/>
+  <text x="534" y="506" font-size="13" font-weight="700" fill="#075985">🕸 graph · 4</text>
+  <text x="534" y="526" font-size="9.5" fill="#334155">requirements_for</text>
+  <text x="534" y="540" font-size="9.5" fill="#334155">neighbors · list_concepts</text>
+  <text x="534" y="554" font-size="9.5" fill="#334155">add_relation</text>
+  <text x="534" y="574" font-size="9" fill="#64748b">NetworkX ontology</text>
+
+  <rect x="708" y="486" width="130" height="150" rx="9" fill="#e0f2fe" stroke="#0ea5e9"/>
+  <text x="720" y="506" font-size="13" font-weight="700" fill="#075985">🌐 serper · 1</text>
+  <text x="720" y="526" font-size="9.5" fill="#334155">google_search</text>
+
+  <rect x="854" y="486" width="150" height="150" rx="9" fill="#e0f2fe" stroke="#0ea5e9"/>
+  <text x="866" y="506" font-size="13" font-weight="700" fill="#075985">🍸 cocktail · 5</text>
+  <text x="866" y="526" font-size="9" fill="#334155">search_cocktail_by_name</text>
+  <text x="866" y="540" font-size="9" fill="#334155">list_cocktails_by_first_letter</text>
+  <text x="866" y="554" font-size="9" fill="#334155">search_ingredient_by_name</text>
+  <text x="866" y="568" font-size="9" fill="#334155">list_random_cocktails</text>
+  <text x="866" y="582" font-size="9" fill="#334155">lookup_cocktail_details_by_id</text>
+  <text x="866" y="602" font-size="9" fill="#64748b">(demo)</text>
+
+  <!-- server -> store arrows -->
+  <line x1="120" y1="636" x2="120" y2="660" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <line x1="431" y1="636" x2="431" y2="660" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <line x1="607" y1="636" x2="607" y2="660" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+  <line x1="773" y1="636" x2="773" y2="660" stroke="#64748b" stroke-width="1.3" marker-end="url(#arr)"/>
+
+  <!-- stores / systems -->
+  <rect x="40" y="660" width="300" height="50" rx="8" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="190" y="681" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">🗄 SAP S/4HANA · API_PRODUCT_SRV</text>
+  <text x="190" y="697" text-anchor="middle" font-size="9.5" fill="#7f1d1d">SYSTEM OF RECORD — instances (external)</text>
+  <rect x="356" y="660" width="150" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+  <text x="431" y="681" text-anchor="middle" font-size="12" font-weight="700" fill="#5b21b6">🔢 FAISS</text>
+  <text x="431" y="697" text-anchor="middle" font-size="9" fill="#4c1d95">semantic index → Brain</text>
+  <rect x="522" y="660" width="170" height="50" rx="8" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="607" y="681" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">🕸 NetworkX ontology</text>
+  <text x="607" y="697" text-anchor="middle" font-size="9" fill="#14532d">concepts (= the KG) → Brain</text>
+  <rect x="708" y="660" width="130" height="50" rx="8" fill="#e2e8f0" stroke="#475569"/>
+  <text x="773" y="681" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">🌐 Google</text>
+  <text x="773" y="697" text-anchor="middle" font-size="9" fill="#475569">web facts (external)</text>
+
+  <!-- Brain -->
+  <rect x="40" y="734" width="964" height="146" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="58" y="756" font-size="14" font-weight="700" fill="#5b21b6">🧠 BRAIN — memory · KG · vectors · config   (read to reason · written to learn)</text>
+  <text x="58" y="780" font-size="11.5" fill="#334155">• <tspan font-weight="700">Persistent memory</tspan> — knowledge.md + remember()  → lessons that survive restarts (the learning loop)</text>
+  <text x="58" y="800" font-size="11.5" fill="#334155">• <tspan font-weight="700">Conversation memory</tspan> — ADK session state (within one chat)</text>
+  <text x="58" y="820" font-size="11.5" fill="#334155">• <tspan font-weight="700">Vector store</tspan> — FAISS ↑ (behind the vector server)  ·  <tspan font-weight="700">Knowledge Graph</tspan> — NetworkX ontology ↑ (behind the graph server)</text>
+  <text x="58" y="840" font-size="11.5" fill="#334155">• <tspan font-weight="700">Reference config</tspan> — plant_country.json · code_book.json · rules.md</text>
+  <text x="58" y="864" font-size="10.5" font-style="italic" fill="#64748b">SAP = instances · KG = concepts — never duplicate one into the other.   Agents read the Brain to reason; the learning loop writes it.</text>
+  <path d="M431,734 C431,724 431,720 431,712" fill="none" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrb)"/>
+  <path d="M607,734 C607,724 607,720 607,712" fill="none" stroke="#a78bfa" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#arrb)"/>
+
+  <!-- agents <-> Brain (knowledge.md memory — DIRECT, not via MCP) -->
+  <path d="M290,318 L18,318 L18,804 L40,804" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arrb)"/>
+  <text x="12" y="566" font-size="10" font-weight="600" fill="#7c3aed" transform="rotate(-90 12 566)">agents ⇅ knowledge.md  ·  inject ↓ / remember() ↑</text>
+
+  <!-- Legend -->
+  <rect x="40" y="896" width="964" height="80" rx="9" fill="#fff" stroke="#e4e8ef"/>
+  <rect x="56" y="910" width="24" height="16" rx="5" fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.8"/>
+  <text x="88" y="922" font-size="11" fill="#334155"><tspan font-weight="700">🤖 LLM Agent (8)</tspan> reasons &amp; acts</text>
+  <rect x="270" y="910" width="24" height="16" rx="5" fill="#fff" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="302" y="922" font-size="11" fill="#334155"><tspan font-weight="700">Orchestrator</tspan> Sequential/Parallel/Loop — no LLM</text>
+  <rect x="610" y="910" width="24" height="14" rx="7" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.4"/>
+  <text x="642" y="922" font-size="11" fill="#334155"><tspan font-weight="700">🧭 Router</tspan> LLM classifier — not an Agent</text>
+  <rect x="56" y="940" width="24" height="16" rx="5" fill="#e0f2fe" stroke="#0ea5e9"/>
+  <text x="88" y="952" font-size="11" fill="#334155"><tspan font-weight="700">MCP server</tspan> tools (vertical ↕)</text>
+  <rect x="270" y="940" width="24" height="16" rx="5" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="302" y="952" font-size="11" fill="#334155"><tspan font-weight="700">🧠 Brain</tspan> memory · KG · vectors · config</text>
+  <rect x="610" y="940" width="24" height="16" rx="5" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="642" y="952" font-size="11" fill="#334155"><tspan font-weight="700">System of record / external</tspan> (SAP · Web)</text>
+</svg>

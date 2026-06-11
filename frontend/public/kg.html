@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>D2M · Knowledge Graph</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root { --bg:#0b1220; --panel:#0f172a; --ink:#e2e8f0; --muted:#94a3b8; --line:#233047;
+          --type:#60a5fa; --view:#34d399; --object:#fbbf24; --org:#c084fc; }
+  * { box-sizing:border-box; } html,body { height:100%; margin:0; }
+  body { background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; display:flex; flex-direction:column; }
+  header { padding:11px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; background:var(--panel); }
+  header h1 { font-size:15px; margin:0; font-weight:650; }
+  header .sub { color:var(--muted); font-size:12px; }
+  header .legend { margin-left:auto; display:flex; gap:14px; font-size:12px; align-items:center; }
+  .legend i { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+  #net { flex:1; min-height:0; }
+  #err { color:#fca5a5; padding:12px 18px; font-size:13px; }
+  .ctl { font-size:12px; color:var(--muted); }
+  .ctl button { background:#1e293b; color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:4px 10px; font-size:12px; cursor:pointer; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🕸 D2M Knowledge Graph</h1>
+    <span class="sub" id="counts">loading…</span>
+    <span class="ctl"><button id="fit">Fit</button> <button id="phys">Freeze</button></span>
+    <div class="legend">
+      <span><i style="background:var(--type)"></i>material type</span>
+      <span><i style="background:var(--view)"></i>view</span>
+      <span><i style="background:var(--object)"></i>object</span>
+      <span><i style="background:var(--org)"></i>org concept</span>
+    </div>
+  </header>
+  <div id="net"></div>
+  <div id="err"></div>
+
+<script>
+  const COLOR = { material_type:"#60a5fa", view:"#34d399", object:"#fbbf24", org_concept:"#c084fc" };
+  const REL_COLOR = { requires:"#f87171", has_view:"#64748b", needs:"#22d3ee", enabled_by:"#a3e635", in:"#94a3b8", sells_through:"#94a3b8" };
+
+  async function draw() {
+    let data;
+    try { data = await (await fetch("/api/kg")).json(); }
+    catch (e) { document.getElementById("err").textContent = "Could not load /api/kg — open this via the running app (http://host/kg.html), not as a file."; return; }
+    if (data.error || !data.nodes || !data.nodes.length) {
+      document.getElementById("err").textContent = "KG load error: " + (data.error || "no nodes"); return;
+    }
+    document.getElementById("counts").textContent = `${data.counts.nodes} nodes · ${data.counts.edges} edges (ontology — types + rules, no instances)`;
+
+    const nodes = data.nodes.map((n) => {
+      const kind = n.kind || "object";
+      const attrs = Object.entries(n).filter(([k]) => !["id","kind"].includes(k)).map(([k,v]) => `${k}: ${v}`).join("<br>");
+      return { id:n.id, label:n.id, group:kind,
+        color:{ background:COLOR[kind]||"#94a3b8", border:"#0b1220" }, font:{ color:"#0b1220", size:14, face:"system-ui" },
+        shape:kind==="material_type"?"hexagon":kind==="object"?"box":"dot",
+        size:kind==="material_type"?22:16,
+        title:(n.kind||"")+(attrs?("<br>"+attrs):"") };
+    });
+    const edges = data.edges.map((e) => ({
+      from:e.source, to:e.target, label:e.relation, arrows:"to",
+      color:{ color:REL_COLOR[e.relation]||"#475569", opacity:0.8 },
+      font:{ color:"#94a3b8", size:9, strokeWidth:0, align:"middle" }, smooth:{ type:"dynamic" } }));
+
+    const net = new vis.Network(document.getElementById("net"),
+      { nodes:new vis.DataSet(nodes), edges:new vis.DataSet(edges) },
+      { physics:{ barnesHut:{ gravitationalConstant:-6000, springLength:130, springConstant:0.03 }, stabilization:{ iterations:200 } },
+        interaction:{ hover:true, tooltipDelay:120 }, edges:{ width:1.4 }, nodes:{ borderWidth:2 } });
+
+    document.getElementById("fit").onclick = () => net.fit({ animation:true });
+    let on = true;
+    document.getElementById("phys").onclick = (ev) => { on=!on; net.setOptions({ physics:on }); ev.target.textContent = on?"Freeze":"Unfreeze"; };
+  }
+  draw();
+</script>
+</body>
+</html>

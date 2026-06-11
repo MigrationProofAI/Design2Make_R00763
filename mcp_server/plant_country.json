@@ -1,0 +1,7 @@
+{
+  "_note": "Plant -> country/name mapping for search_materials. SAP API_PRODUCT_SRV has no plant-country field and a plant-master service is not reachable here, so this is MAINTAINED CONFIG, not auto-derived. Seeded with the S/4HANA best-practice plants verified to exist in this system. Run the list_plants tool to see which plant codes actually exist, then add them below. Country should be an ISO 2-letter code.",
+  "plants": {
+    "1010": { "country": "DE", "name": "Germany - Werk Hamburg" },
+    "1710": { "country": "US", "name": "USA - Plant 1 US" }
+  }
+}

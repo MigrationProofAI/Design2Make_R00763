@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ADK · SAP Material Assistant</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="d2m_render.js"></script>
+    <style>
+      :root {
+        --bg: #f4f6fa; --panel: #ffffff; --ink: #1f2733; --muted: #6b7785;
+        --line: #e4e8ef; --user: #2563eb; --userink: #fff;
+        --search: #2563eb; --create: #16a34a; --validate: #d97706;
+        --act-bg: #0f172a; --act-ink: #e2e8f0; --act-line: #233047;
+        --data-bg: #f7fbff;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        color: var(--ink); background: var(--bg); display: flex; flex-direction: column; height: 100vh; }
+      /* top bar */
+      .topbar { display: flex; align-items: center; gap: 12px; padding: 9px 18px;
+        background: var(--panel); border-bottom: 1px solid var(--line); }
+      .topbar img { height: 26px; }
+      .topbar h1 { font-size: 15px; margin: 0; font-weight: 650; }
+      .topbar .sub { color: var(--muted); font-size: 12px; }
+      .seg { margin-left: 14px; display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+      .seg button { border: 0; background: #fff; padding: 5px 11px; font-size: 12px; cursor: pointer; color: var(--muted); }
+      .seg button.on { background: var(--user); color: #fff; font-weight: 600; }
+      .conn { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; }
+      .dot.on { background: #22c55e; } .dot.off { background: #ef4444; }
+      /* workspace */
+      .workspace { flex: 1; display: flex; min-height: 0; }
+      .chat { flex: 1 1 auto; min-width: 260px; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+      .activity { flex: 0 0 auto; width: 340px; min-width: 200px; overflow-y: auto; background: var(--act-bg); color: var(--act-ink); padding: 14px; }
+      .data { flex: 0 0 auto; width: 340px; min-width: 200px; overflow-y: auto; background: var(--data-bg); border-left: 1px solid var(--line); padding: 14px; }
+      .panel-h { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 2px 4px 12px; font-weight: 600; }
+      .activity .panel-h { color: #94a3b8; } .data .panel-h { color: var(--muted); }
+      .splitter { flex: 0 0 6px; cursor: col-resize; background: transparent; }
+      .splitter:hover { background: #cbd5e1; }
+      /* 2-column: hide data + its splitter */
+      .workspace[data-cols="2"] #dataSplitter, .workspace[data-cols="2"] .data { display: none; }
+      /* chat bubbles */
+      .msg { display: flex; flex-direction: column; max-width: 84%; }
+      .msg.user { align-self: flex-end; align-items: flex-end; }
+      .msg.agent { align-self: flex-start; align-items: flex-start; }
+      .bubble { padding: 10px 14px; border-radius: 14px; line-height: 1.5; box-shadow: 0 1px 2px rgba(16,24,40,.06); overflow-wrap: anywhere; }
+      .msg.user .bubble { background: var(--user); color: var(--userink); border-bottom-right-radius: 4px; }
+      .msg.agent .bubble { background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+      .msg .bubble :first-child { margin-top: 0; } .msg .bubble :last-child { margin-bottom: 0; }
+      .msg.agent.d2m { max-width: 96%; width: 540px; }
+      .bubble.d2m-bubble { background: transparent; border: 0; box-shadow: none; padding: 0; }
+      .msg-img { display: block; max-width: 230px; max-height: 230px; border-radius: 8px; margin-top: 6px; }
+      .intent-chip { font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+        color: #fff; padding: 2px 8px; border-radius: 999px; margin: 0 0 5px 4px; }
+      .route-search { background: var(--search); } .route-create_change { background: var(--create); } .route-validate { background: var(--validate); }
+      .route-boardroom { background: #7c3aed; } .route-planning { background: #0891b2; } .route-make { background: #db2777; } .route-genesis { background: #ea580c; }
+      .status-line { align-self: center; color: var(--muted); font-size: 12px; font-style: italic; }
+      .thinking { align-self: flex-start; display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 13px; font-style: italic; padding: 8px 13px; margin: 2px 0; }
+      .thinking .spin { width: 13px; height: 13px; border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; opacity: .75; flex: none; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .ts { font-size: 10px; color: var(--muted); margin: 3px 6px 0; }
+      .card-ts { font-size: 10px; color: #64748b; font-weight: 400; }
+      .bubble table { border-collapse: collapse; margin: 6px 0; font-size: 13px; }
+      .bubble th, .bubble td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+      .bubble th { background: #f1f5f9; }
+      .bubble code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+      .bubble pre { background: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 8px; overflow-x: auto; }
+      .bubble pre code { background: none; color: inherit; }
+      /* activity trace */
+      .act-turn { border: 1px solid var(--act-line); border-radius: 10px; padding: 10px; margin-bottom: 12px; background: #0b1220; }
+      .act-route { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #fff; padding: 2px 8px; border-radius: 999px; display: inline-block; margin-bottom: 8px; }
+      .act-call { font-family: ui-monospace, Consolas, monospace; font-size: 12px; margin: 4px 0; }
+      .act-call .who { color: #7dd3fc; font-weight: 700; } .act-call code { color: #fde68a; }
+      .act-result { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; color: #94a3b8; padding-left: 14px; margin: 1px 0 5px; overflow-wrap: anywhere; }
+      .act-text { font-size: 11.5px; color: #cbd5e1; margin: 3px 0; } .act-text .who { color: #7dd3fc; font-weight: 700; }
+      .act-substep { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #cbd5e1; padding-left: 26px; margin: 1px 0; overflow-wrap: anywhere; }
+      .verdict { font-size: 12px; padding: 3px 8px 3px 26px; margin: 2px 0; border-left: 3px solid #475569; line-height: 1.4; overflow-wrap: anywhere; }
+      .verdict.v-escalate { border-left-color: #ef4444; } .verdict.v-alternate { border-left-color: #f59e0b; } .verdict.v-accept { border-left-color: #22c55e; }
+      .v-badge { font-weight: 700; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-right: 5px; }
+      .v-escalate .v-badge { background: #ef4444; color: #fff; } .v-alternate .v-badge { background: #f59e0b; color: #0b1220; } .v-accept .v-badge { background: #22c55e; color: #0b1220; }
+      .v-comp { font-weight: 700; color: #e2e8f0; } .v-sev { color: #94a3b8; font-size: 10px; text-transform: uppercase; margin: 0 4px; } .v-ev { color: #64748b; font-style: italic; }
+      .explain-btn { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 6px; font-size: 11px; padding: 2px 9px; margin: 5px 0 2px 26px; cursor: pointer; }
+      .explain-btn:hover { background: #334155; } .explain-btn:disabled { opacity: .6; cursor: default; }
+      .act-explain { font-size: 12px; color: #fde68a; background: #1f2937; border-left: 3px solid #fcd34d; padding: 6px 10px; margin: 5px 0 4px 26px; border-radius: 4px; line-height: 1.45; }
+      .sess-row { position: relative; }
+      .rerun-btn { position: absolute; right: 10px; top: 10px; background: #1e293b; color: #93c5fd; border: 1px solid #334155; border-radius: 6px; font-size: 11px; padding: 2px 8px; cursor: pointer; }
+      .rerun-btn:hover { background: #334155; border-color: #3b82f6; }
+      .tour-cap { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); max-width: 780px; width: 88%; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 12px; padding: 13px 18px; font-size: 14px; line-height: 1.5; box-shadow: 0 12px 34px rgba(0,0,0,.45); z-index: 9999; }
+      .tour-cap b { color: #fcd34d; margin-right: 6px; }
+      .tour-hi { outline: 3px solid #fcd34d; outline-offset: -3px; border-radius: 4px; transition: outline .15s; }
+      .act-struct { font-size: 10.5px; color: #93b4d8; margin: 2px 0 9px 2px; font-family: ui-monospace, Consolas, monospace; }
+      .act-thought { font-size: 11.5px; color: #c4b5fd; font-style: italic; margin: 3px 0; overflow-wrap: anywhere; }
+      .act-reflect { font-size: 11.5px; color: #6ee7b7; margin: 3px 0; overflow-wrap: anywhere; }
+      .act-result b { color: #7dd3fc; }
+      .act-dur { color: #fbbf24; font-weight: 700; }
+      .toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%) translateY(12px); background: #0f172a; color: #e2e8f0; padding: 9px 16px; border-radius: 10px; font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.3); opacity: 0; transition: opacity .25s, transform .25s; z-index: 60; pointer-events: none; }
+      .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+      /* data panel */
+      .data-card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+      .data-tool { font-family: ui-monospace, Consolas, monospace; font-size: 11px; font-weight: 700; color: var(--user); margin-bottom: 6px; }
+      table.data-kv, table.data-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+      table.data-kv td { padding: 3px 6px; vertical-align: top; border-bottom: 1px solid #eef2f7; }
+      table.data-kv td.dk { color: var(--muted); font-weight: 600; white-space: nowrap; width: 40%; }
+      table.data-table th, table.data-table td { border: 1px solid var(--line); padding: 3px 6px; text-align: left; }
+      table.data-table th { background: #eef4ff; font-size: 11px; }
+      .data-ul { margin: 4px 0 4px 16px; padding: 0; font-size: 12px; }
+      pre.data-json { background: #0f172a; color: #e2e8f0; font-size: 11px; padding: 8px; border-radius: 6px; overflow-x: auto; margin: 2px 0; }
+      /* composer */
+      .composer { border-top: 1px solid var(--line); background: var(--panel); padding: 10px 16px; }
+      .staging { display: none; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+      .staging img { height: 48px; border-radius: 6px; border: 1px solid var(--line); }
+      .composer-row { display: flex; align-items: center; gap: 8px; }
+      .icon-btn { border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; font-size: 17px; line-height: 1; padding: 8px 10px; user-select: none; }
+      .icon-btn:hover { background: #f1f5f9; } .icon-btn.rec { background: #fee2e2; border-color: #fecaca; }
+      #message { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; }
+      #message:focus { border-color: var(--user); }
+      .send-btn { background: var(--user); color: #fff; border: none; border-radius: 10px; padding: 10px 18px; font-weight: 650; cursor: pointer; }
+      .send-btn:disabled { background: #a9c2f6; cursor: not-allowed; }
+      .rec-timer { color: #c0392b; font-weight: 700; font-size: 13px; min-width: 92px; }
+      .discard { border: none; background: #eef2f7; border-radius: 6px; cursor: pointer; padding: 3px 7px; font-size: 12px; }
+      /* session bar + browser */
+      .sess-chip { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; }
+      .sess-chip code { background: #eef2f7; padding: 1px 6px; border-radius: 5px; font-family: ui-monospace, Consolas, monospace; color: var(--ink); }
+      .mini-btn { border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer; color: var(--muted); }
+      .mini-btn:hover { background: #f1f5f9; }
+      .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: flex-start; justify-content: center; z-index: 50; }
+      .modal-bg.on { display: flex; }
+      .modal { background: #fff; margin-top: 58px; width: 560px; max-width: 92vw; max-height: 76vh; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; }
+      .modal-h { padding: 11px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14px; }
+      .modal-h .sp { margin-left: auto; }
+      .sess-list { overflow-y: auto; padding: 6px; }
+      .sess-row { padding: 9px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+      .sess-row:hover { background: #f1f5f9; border-color: var(--line); }
+      .sess-row.cur { background: #eff6ff; border-color: #bfdbfe; }
+      .sess-title { font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sess-meta { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: ui-monospace, Consolas, monospace; }
+      @media (max-width: 760px) { .activity, .data, .splitter { display: none !important; } }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <img src="https://google.github.io/adk-docs/assets/agent-development-kit.png" alt="ADK" />
+      <h1>SAP Material Assistant</h1><span class="sub">· ADK · MCP</span>
+      <div class="seg" id="layoutSeg">
+        <button data-cols="2">2-col</button><button data-cols="3">3-col</button>
+      </div>
+      <span class="sess-chip">Session <code id="sessId">—</code></span>
+      <button class="mini-btn" id="copySess" title="Copy session id">⧉</button>
+      <button class="mini-btn" id="openSessions" title="Browse / resume sessions">🗂 Sessions</button>
+      <button class="mini-btn" id="soundToggle" title="Chime when a run finishes">🔔</button>
+      <button class="mini-btn" id="tourBtn" title="A spoken tour of what this app does">🎙 Tour</button>
+      <div class="conn"><span class="dot" id="connDot"></span><span id="connText">connecting…</span></div>
+    </header>
+
+    <div class="workspace" id="workspace" data-cols="3">
+      <section class="chat" id="chat"></section>
+      <div class="splitter"></div>
+      <aside class="activity"><div class="panel-h">🔭 Agent Activity</div><div id="activityList"></div></aside>
+      <div class="splitter" id="dataSplitter"></div>
+      <aside class="data"><div class="panel-h">📦 Structured Data</div><div id="dataList"></div></aside>
+    </div>
+
+    <div class="modal-bg" id="sessionModal">
+      <div class="modal">
+        <div class="modal-h">🗂 Sessions <span class="sp"></span>
+          <button class="mini-btn" id="newSession">+ New</button>
+          <button class="mini-btn" id="refreshSessions">↻ Refresh</button>
+          <button class="mini-btn" id="closeSessions">✕</button>
+        </div>
+        <div class="sess-list" id="sessionList"></div>
+      </div>
+    </div>
+
+    <form class="composer" id="messageForm">
+      <div class="staging" id="stagingArea"></div>
+      <div class="composer-row">
+        <label class="icon-btn" for="imageInput" title="Attach image">📎</label>
+        <input type="file" id="imageInput" accept="image/*" hidden />
+        <button type="button" class="icon-btn" id="micButton" title="Voice">🎤</button>
+        <span class="rec-timer" id="recTimer"></span>
+        <input type="text" id="message" placeholder="Message…  (try: find a gaming processor)" autocomplete="off" />
+        <button type="submit" class="send-btn" id="sendButton" disabled>Send</button>
+      </div>
+    </form>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const $ = (id) => document.getElementById(id);
+        const chat = $("chat"), activityList = $("activityList"), dataList = $("dataList");
+        const form = $("messageForm"), input = $("message"), sendBtn = $("sendButton");
+        const imageInput = $("imageInput"), micButton = $("micButton"), stagingArea = $("stagingArea");
+        const recTimer = $("recTimer"), connDot = $("connDot"), connText = $("connText");
+        const workspace = $("workspace");
+        const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const scroll = () => { chat.scrollTop = chat.scrollHeight; };
+        const ts = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const activityPanel = document.querySelector(".activity");
+        const dataPanel = document.querySelector(".data");
+        const toBottom = (el) => { el.scrollTop = el.scrollHeight; };
+
+        // ---------- layout toggle + resizable splitters ----------
+        function setCols(c) {
+          workspace.dataset.cols = c;
+          localStorage.setItem("adk.cols", c);
+          $("layoutSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.cols === c));
+        }
+        $("layoutSeg").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setCols(b.dataset.cols)));
+        setCols(localStorage.getItem("adk.cols") || "3");
+
+        document.querySelectorAll(".splitter").forEach((sp) => {
+          sp.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            const panel = sp.nextElementSibling;
+            const startX = e.clientX, startW = panel.getBoundingClientRect().width;
+            const move = (ev) => { panel.style.width = Math.max(200, Math.min(640, startW - (ev.clientX - startX))) + "px"; };
+            const up = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); document.body.style.userSelect = ""; };
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
+          });
+        });
+
+        // ---------- attachments / mic ----------
+        let attachedImage = null, recordedAudio = null;
+        let mediaRecorder = null, audioChunks = [], isRecording = false, recInt = null, recSec = 0, recognition = null, speechBase = "";
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const fileToB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(blob); });
+
+        function renderStaging() {
+          stagingArea.innerHTML = ""; let any = false;
+          if (attachedImage) { any = true; const w = document.createElement("span");
+            const img = document.createElement("img"); img.src = `data:${attachedImage.mime};base64,${attachedImage.data}`;
+            const x = document.createElement("button"); x.type = "button"; x.className = "discard"; x.textContent = "✕ image";
+            x.onclick = () => { attachedImage = null; imageInput.value = ""; renderStaging(); }; w.append("📷 ", img, " ", x); stagingArea.appendChild(w); }
+          if (recordedAudio) { any = true; const w = document.createElement("span");
+            const a = document.createElement("audio"); a.controls = true; a.src = `data:${recordedAudio.mime};base64,${recordedAudio.data}`; a.style.height = "32px";
+            const x = document.createElement("button"); x.type = "button"; x.className = "discard"; x.textContent = "✕ audio";
+            x.onclick = () => { recordedAudio = null; renderStaging(); }; w.append("🎤 ", a, " ", x); stagingArea.appendChild(w); }
+          stagingArea.style.display = any ? "flex" : "none";
+        }
+        imageInput.addEventListener("change", async () => { const f = imageInput.files[0]; if (!f) { attachedImage = null; renderStaging(); return; }
+          try { attachedImage = { mime: f.type || "image/jpeg", data: await fileToB64(f) }; } catch (e) { attachedImage = null; } renderStaging(); });
+
+        function startTimer(label) { recSec = 0; recTimer.textContent = `● ${label} 0:00`;
+          recInt = setInterval(() => { recSec++; recTimer.textContent = `● ${label} ${(recSec/60|0)}:${String(recSec%60).padStart(2,"0")}`; }, 1000); }
+        const stopTimer = () => { clearInterval(recInt); recTimer.textContent = ""; };
+        function startLiveSTT() {
+          recognition = new SpeechRecognition(); recognition.lang = "en-US"; recognition.interimResults = true; recognition.continuous = true;
+          speechBase = input.value ? input.value.trim() + " " : "";
+          recognition.onresult = (e) => { let fin = "", it = ""; for (let i = 0; i < e.results.length; i++) { const t = e.results[i][0].transcript; e.results[i].isFinal ? (fin += t + " ") : (it += t); } input.value = (speechBase + fin + it).trim(); };
+          recognition.onend = () => { isRecording = false; recognition = null; micButton.textContent = "🎤"; micButton.classList.remove("rec"); stopTimer(); };
+          recognition.start(); isRecording = true; micButton.textContent = "⏹"; micButton.classList.add("rec"); startTimer("Listening");
+        }
+        async function startWhisper() {
+          try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); mediaRecorder = new MediaRecorder(stream); audioChunks = [];
+            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+              recordedAudio = { mime: blob.type, data: await fileToB64(blob) }; mediaRecorder = null; isRecording = false; micButton.textContent = "🎤"; micButton.classList.remove("rec"); stopTimer(); renderStaging(); };
+            mediaRecorder.start(); isRecording = true; micButton.textContent = "⏹"; micButton.classList.add("rec"); startTimer("Recording");
+          } catch (e) { addStatus("Microphone unavailable: " + e.message); }
+        }
+        micButton.addEventListener("click", () => { if (isRecording) { recognition ? recognition.stop() : mediaRecorder && mediaRecorder.stop(); return; } SpeechRecognition ? startLiveSTT() : startWhisper(); });
+
+        // ---------- chat / activity / data rendering ----------
+        function addUserMessage(text, image) { const m = document.createElement("div"); m.className = "msg user"; const b = document.createElement("div"); b.className = "bubble";
+          if (text) { const p = document.createElement("div"); p.textContent = text; b.appendChild(p); }
+          if (image) { const img = document.createElement("img"); img.className = "msg-img"; img.src = `data:${image.mime};base64,${image.data}`; b.appendChild(img); }
+          m.appendChild(b); const tt = document.createElement("div"); tt.className = "ts"; tt.textContent = ts(); m.appendChild(tt); chat.appendChild(m); scroll(); }
+        function addAgentMessage(answer, intent) { const m = document.createElement("div"); m.className = "msg agent";
+          if (intent) { const c = document.createElement("span"); c.className = "intent-chip route-" + intent; c.textContent = intent; m.appendChild(c); }
+          const b = document.createElement("div"); b.className = "bubble"; try { b.innerHTML = marked.parse(answer || ""); } catch (e) { b.textContent = answer || ""; }
+          m.appendChild(b); const tt = document.createElement("div"); tt.className = "ts"; tt.textContent = ts(); m.appendChild(tt); chat.appendChild(m); scroll(); }
+        function addAgentCard(data, intent) {              // deterministic d2m card IN the chat (always visible)
+          if (!data || !window.d2mRender) return false;
+          const body = document.createElement("div");
+          if (!window.d2mRender(data.tool, data.payload, body)) return false;
+          const m = document.createElement("div"); m.className = "msg agent d2m";
+          if (intent) { const c = document.createElement("span"); c.className = "intent-chip route-" + intent; c.textContent = intent; m.appendChild(c); }
+          const b = document.createElement("div"); b.className = "bubble d2m-bubble"; b.appendChild(body);
+          m.appendChild(b); const tt = document.createElement("div"); tt.className = "ts"; tt.textContent = ts(); m.appendChild(tt);
+          chat.appendChild(m); scroll(); return true;
+        }
+        function addStatus(text) { const d = document.createElement("div"); d.className = "status-line"; d.textContent = text; chat.appendChild(d); scroll(); }
+
+        // Orchestration shape per intent -- so the trace shows the router's pick AND the
+        // agent structure behind it (single LlmAgent vs the Sequential pipeline, etc.).
+        const STRUCT = {
+          search: "LlmAgent · read-only tools",
+          create_change: "Sequential pipeline · Intake → ValidateEnrich → Writer",
+          make: "LlmAgent · make tools (PIR/cost/BOM/routing)",
+          genesis: "LlmAgent (vision) → run_genesis orchestrator",
+          planning: "LlmAgent → remote MRP server (RFC)",
+          boardroom: "Conductor (dossier) → Parallel · Engg ∥ Proc ∥ Comp ∥ Fin → Chair",
+          validate: "Rule engine · deterministic",
+        };
+        function parseVerdicts(txt) {        // pipe-format board verdicts -> structured rows (C made this possible)
+          if (!/\b(ACCEPT|ALTERNATE|ESCALATE)\s*\|/.test(txt)) return [];
+          const out = [];
+          txt.replace(/\s*(ACCEPT|ALTERNATE|ESCALATE)\s*\|/g, "\n$1 |").split("\n").forEach((line) => {
+            const m = line.match(/^(ACCEPT|ALTERNATE|ESCALATE)\s*\|\s*([^|]*)\|\s*([^|]*)\|\s*([^|]*)\|\s*(.*)$/);
+            if (m) out.push({ disp: m[1], component: m[2].trim(), severity: m[3].trim(), issue: m[4].trim(), evidence: m[5].trim() });
+          });
+          return out;
+        }
+        function addActivity(intent, trace) {
+          const turn = document.createElement("div"); turn.className = "act-turn";
+          const r = document.createElement("span"); r.className = "act-route route-" + (intent || "search"); r.textContent = "🧭 " + (intent || "session"); turn.appendChild(r);
+          const at = document.createElement("span"); at.className = "card-ts"; at.textContent = "  " + ts(); turn.appendChild(at);
+          const sub = document.createElement("div"); sub.className = "act-struct";
+          sub.textContent = "🧠 Router → " + (STRUCT[intent] || "agent"); turn.appendChild(sub);
+          (trace || []).forEach((s) => {
+            if (s.kind === "tool_call") {
+              const row = document.createElement("div"); row.className = "act-call";
+              const a = Object.entries(s.args || {}).map(([k, v]) => `${esc(k)}=${esc(v)}`).join(", ");
+              row.innerHTML = `<span class="who">${esc(s.author)}</span> <code>${esc(s.tool)}(${a})</code>`;
+              turn.appendChild(row);
+            } else if (s.kind === "tool_result") {
+              const row = document.createElement("div"); row.className = "act-result";
+              const dur = (s.dur != null) ? ` <span class="act-dur">⏱ ${s.dur}s</span>` : "";
+              if (s.lines && s.lines.length) {              // orchestrator report -> sub-steps
+                row.innerHTML = `↳ <b>${esc(s.tool)}</b>${dur}`; turn.appendChild(row);
+                s.lines.forEach((ln) => { const sub = document.createElement("div"); sub.className = "act-substep"; sub.textContent = "• " + ln; turn.appendChild(sub); });
+              } else {
+                row.innerHTML = "↳ " + esc(s.result || "") + dur; turn.appendChild(row);
+              }
+            } else if (s.kind === "text") {
+              const txt = (s.text || "").trim();
+              const verdicts = parseVerdicts(txt);
+              if (verdicts.length) {                       // boardroom assessor -> color-coded verdict rows
+                const head = document.createElement("div"); head.className = "act-text";
+                head.innerHTML = `<span class="who">${esc(s.author)}</span>`; turn.appendChild(head);
+                verdicts.forEach((v) => {
+                  const row = document.createElement("div"); row.className = "verdict v-" + v.disp.toLowerCase();
+                  row.innerHTML = `<span class="v-badge">${v.disp}</span><span class="v-comp">${esc(v.component)}</span>`
+                    + `<span class="v-sev">${esc(v.severity)}</span>${esc(v.issue)}`
+                    + (v.evidence ? ` <span class="v-ev">— ${esc(v.evidence)}</span>` : "");
+                  turn.appendChild(row);
+                });
+              } else {
+                const cls = txt.startsWith("💭") ? "act-thought" : txt.startsWith("✦") ? "act-reflect" : "act-text";
+                const row = document.createElement("div"); row.className = cls;
+                if (cls === "act-text") row.innerHTML = `<span class="who">${esc(s.author)}</span> ${esc(s.text || "")}`;
+                else row.textContent = txt;                // 💭 thought / ✦ reflection
+                turn.appendChild(row);
+              }
+            }
+          });
+          if (!trace || !trace.length) { const e = document.createElement("div"); e.className = "act-text"; e.textContent = "(no tool calls)"; turn.appendChild(e); }
+          const eb = document.createElement("button"); eb.className = "explain-btn"; eb.textContent = "💡 Explain";  // AI explainer, on demand
+          eb.onclick = () => explainTurn(intent, trace, eb, turn);
+          turn.appendChild(eb);
+          activityList.appendChild(turn); toBottom(activityPanel);
+        }
+        async function explainTurn(intent, trace, btn, turn) {     // narrate this turn's actions in plain language
+          btn.disabled = true; const orig = btn.textContent; btn.textContent = "💡 …";
+          try {
+            const r = await fetch("/api/explain", { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ intent, steps: trace || [] }) });
+            const d = await r.json();
+            const ex = document.createElement("div"); ex.className = "act-explain";
+            ex.textContent = "💡 " + (d.explanation || "(no explanation)");
+            turn.insertBefore(ex, btn); btn.remove();
+          } catch (e) { btn.disabled = false; btn.textContent = orig; }
+        }
+
+        // generic JSON -> DOM (tables for arrays-of-objects, kv for objects, depth-capped)
+        function renderJSON(v, depth) {
+          depth = depth || 0;
+          if (Array.isArray(v)) {
+            if (!v.length) { const s = document.createElement("span"); s.textContent = "[]"; return s; }
+            if (typeof v[0] === "object" && v[0] && !Array.isArray(v[0]) && depth < 3) {
+              const cols = [...new Set(v.flatMap((o) => Object.keys(o)))].slice(0, 6);
+              const t = document.createElement("table"); t.className = "data-table"; const hr = t.insertRow();
+              cols.forEach((c) => { const th = document.createElement("th"); th.textContent = c; hr.appendChild(th); });
+              v.slice(0, 60).forEach((o) => { const r = t.insertRow(); cols.forEach((c) => { const td = r.insertCell(); const val = o[c]; td.textContent = (val && typeof val === "object") ? JSON.stringify(val) : String(val == null ? "" : val); }); });
+              return t;
+            }
+            const ul = document.createElement("ul"); ul.className = "data-ul";
+            v.slice(0, 60).forEach((x) => { const li = document.createElement("li"); li.textContent = (x && typeof x === "object") ? JSON.stringify(x) : String(x); ul.appendChild(li); });
+            return ul;
+          }
+          if (v && typeof v === "object") {
+            if (depth > 2) { const pre = document.createElement("pre"); pre.className = "data-json"; pre.textContent = JSON.stringify(v, null, 1); return pre; }
+            const t = document.createElement("table"); t.className = "data-kv";
+            Object.entries(v).forEach(([k, val]) => { const r = t.insertRow(); const kc = r.insertCell(); kc.className = "dk"; kc.textContent = k; const vc = r.insertCell(); vc.className = "dv";
+              if (val && typeof val === "object") vc.appendChild(renderJSON(val, depth + 1)); else vc.textContent = String(val == null ? "" : val); });
+            return t;
+          }
+          const s = document.createElement("span"); s.textContent = String(v); return s;
+        }
+        function addData(data) {
+          if (!data || data.payload == null) return;
+          const card = document.createElement("div"); card.className = "data-card";
+          const h = document.createElement("div"); h.className = "data-tool"; h.textContent = data.tool + "  ·  " + ts(); card.appendChild(h);
+          const body = document.createElement("div");                       // TYPED card if we have one, else raw JSON
+          if (!(window.d2mRender && window.d2mRender(data.tool, data.payload, body))) {
+            body.appendChild(renderJSON(data.payload, 0));
+          }
+          card.appendChild(body);
+          dataList.appendChild(card); toBottom(dataPanel);
+        }
+
+        // ---------- session (durable: persisted across refresh, reconnect by id) ----------
+        const sessId = $("sessId"), sessionModal = $("sessionModal"), sessionList = $("sessionList");
+        const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID().slice(0, 8)
+                                                                : Math.random().toString(36).slice(2, 10));
+        let sessionId = localStorage.getItem("d2m.session") || newId();
+        localStorage.setItem("d2m.session", sessionId);
+        const renderSessionBar = () => { sessId.textContent = sessionId; };
+
+        async function loadTranscript(id) {                  // reload a session's chat + activity
+          chat.innerHTML = ""; activityList.innerHTML = ""; dataList.innerHTML = "";
+          try {
+            const turns = await (await fetch("/api/sessions/" + id + "/events")).json();
+            turns.forEach((t) => t.role === "user" ? addUserMessage(t.text, null)
+                                                   : addAgentMessage(t.text, null));
+          } catch (e) { addStatus("Could not load session history."); }
+          try {                                              // restore the Agent Activity panel too
+            const tr = await (await fetch("/api/sessions/" + id + "/trace")).json();
+            tr.forEach((turn) => {
+              addActivity(turn.intent, turn.steps || []);
+              (turn.steps || []).forEach((s) => {            // best-effort Structured Data restore
+                if (s.kind === "tool_result" && typeof s.result === "string" && /^[\[{]/.test(s.result.trim())) {
+                  try { addData({ tool: s.tool, payload: JSON.parse(s.result) }); } catch (e) {}
+                }
+              });
+            });
+          } catch (e) {}
+        }
+        function switchSession(id) {                          // point the ws at another session
+          sessionId = id; localStorage.setItem("d2m.session", id); renderSessionBar();
+          if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
+          loadTranscript(id).finally(connect);
+        }
+
+        async function loadSessionList() {
+          sessionList.innerHTML = "<div class='sess-meta' style='padding:12px'>Loading…</div>";
+          let items;
+          try { items = await (await fetch("/api/sessions")).json(); }
+          catch (e) { sessionList.innerHTML = "<div class='sess-meta' style='padding:12px'>Could not load sessions.</div>"; return; }
+          if (!items.length) { sessionList.innerHTML = "<div class='sess-meta' style='padding:12px'>No sessions yet.</div>"; return; }
+          sessionList.innerHTML = "";
+          items.forEach((s) => {
+            const row = document.createElement("div"); row.className = "sess-row" + (s.id === sessionId ? " cur" : "");
+            const t = document.createElement("div"); t.className = "sess-title"; t.textContent = s.title || "(no text yet)";
+            const m = document.createElement("div"); m.className = "sess-meta";
+            const when = s.updated ? new Date(s.updated * 1000).toLocaleString() : "";
+            m.textContent = `${s.turns} turn${s.turns === 1 ? "" : "s"} · ${when} · ${s.id}` + (s.id === sessionId ? " · current" : "");
+            const rr = document.createElement("button"); rr.className = "rerun-btn"; rr.textContent = "▶ Replay"; rr.title = "Play back this session's recorded data, step by step (no live re-run)";
+            rr.onclick = (e) => { e.stopPropagation(); replaySession(s.id); };
+            row.append(t, m, rr);
+            row.onclick = () => { sessionModal.classList.remove("on"); if (s.id !== sessionId) switchSession(s.id); };
+            sessionList.appendChild(row);
+          });
+        }
+
+        // ---------- replay: PROGRESSIVELY render a saved session's RECORDED data over the UI ----------
+        //  NOT a live re-run -- re-executing would be a no-op / duplicate-maker (SAP writes are
+        //  idempotent). This plays back the session-scoped data (transcript + trace + structured
+        //  results) step by step, so it LOOKS like it's running while it's just re-rendering history.
+        let _pendingTurn = null;                             // kept: ws handler calls _resolveTurn() harmlessly
+        function _resolveTurn() { if (_pendingTurn) { const r = _pendingTurn; _pendingTurn = null; r(); } }
+        const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        let _replaying = false;
+        async function replaySession(sourceId) {
+          if (_replaying) return;
+          let turns, trace;
+          try {
+            turns = await (await fetch("/api/sessions/" + sourceId + "/events")).json();   // [{role, text}]
+            trace = await (await fetch("/api/sessions/" + sourceId + "/trace")).json();     // [{intent, input, steps}]
+          } catch (e) { addStatus("Replay: could not load that session."); return; }
+          if (!turns || !turns.length) { addStatus("Replay: nothing recorded in that session."); return; }
+          _replaying = true; sessionModal.classList.remove("on");
+          chat.innerHTML = ""; activityList.innerHTML = ""; dataList.innerHTML = "";   // fresh canvas for the replay
+          addStatus("▶ Replaying " + sourceId + " — recorded data, not a live run");
+          let ti = 0;
+          for (const t of (turns || [])) {
+            if (t.role === "user") {
+              addUserMessage(t.text, null); setWorking(true, "replaying…"); await _sleep(750);
+            } else {
+              const tr = trace[ti++] || {};
+              addActivity(tr.intent, tr.steps || []);                      // the Activity trace for this turn
+              (tr.steps || []).forEach((s) => {                            // structured results -> right panel
+                if (s.kind === "tool_result" && typeof s.result === "string" && /^[\[{]/.test(s.result.trim())) {
+                  try { addData({ tool: s.tool, payload: JSON.parse(s.result) }); } catch (e) {}
+                }
+              });
+              await _sleep(450); setWorking(false);
+              addAgentMessage(t.text, tr.intent || null); await _sleep(900);   // the prose answer
+            }
+          }
+          setWorking(false); _replaying = false;
+          addStatus("▶ Replay complete. Pick a session or + New to go live again.");
+        }
+
+        $("copySess").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(sessionId); };
+        $("openSessions").onclick = () => { sessionModal.classList.add("on"); loadSessionList(); };
+        $("closeSessions").onclick = () => sessionModal.classList.remove("on");
+        $("refreshSessions").onclick = loadSessionList;
+        $("newSession").onclick = () => { sessionModal.classList.remove("on"); switchSession(newId()); };
+        sessionModal.onclick = (e) => { if (e.target === sessionModal) sessionModal.classList.remove("on"); };
+
+        // ---------- done-ping: chime + toast when a run finishes ----------
+        let soundOn = localStorage.getItem("d2m.sound") !== "off";
+        const soundBtn = $("soundToggle");
+        const renderSound = () => { soundBtn.textContent = soundOn ? "🔔" : "🔕"; };
+        soundBtn.onclick = () => { soundOn = !soundOn; localStorage.setItem("d2m.sound", soundOn ? "on" : "off"); renderSound(); if (soundOn) playDone(); };
+        renderSound();
+
+        // ---------- PRODUCT EXPLAINER: a spoken tour of what the app is + what each panel does ----------
+        let _touring = false, _tourAudio = null, _tourResolve = null;
+        function _tourStep(b64, text) {                       // play one section's voice; resolve when it ends
+          return new Promise((resolve) => {
+            const ms = Math.max(2800, (text || "").length * 55);
+            const done = () => { if (_tourResolve) { _tourResolve = null; _tourAudio = null; resolve(); } };
+            _tourResolve = resolve;
+            if (!b64) { setTimeout(done, ms); return; }
+            try {
+              _tourAudio = new Audio("data:audio/mp3;base64," + b64);
+              _tourAudio.onended = done; _tourAudio.onerror = () => setTimeout(done, ms);
+              _tourAudio.play().catch(() => setTimeout(done, ms));
+            } catch (e) { setTimeout(done, ms); }
+          });
+        }
+        function stopTour() {
+          _touring = false;
+          if (_tourAudio) { try { _tourAudio.pause(); } catch (e) {} _tourAudio = null; }
+          if (_tourResolve) { const r = _tourResolve; _tourResolve = null; r(); }
+        }
+        async function startTour() {
+          const btn = $("tourBtn"); _touring = true; btn.textContent = "⏹ Stop";
+          let sections = [];
+          try {
+            const focus = dataList.firstChild ? "the structured data card on the right" : "";
+            const r = await fetch("/api/explain_app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ focus }) });
+            sections = (await r.json()).sections || [];
+          } catch (e) {}
+          if (!sections.length || !_touring) { btn.textContent = "🎙 Tour"; _touring = false; if (!sections.length) addStatus("Tour unavailable."); return; }
+          const cap = document.createElement("div"); cap.className = "tour-cap"; document.body.appendChild(cap);
+          const panelOf = { chat: chat, activity: activityPanel, data: dataPanel };
+          for (const s of sections) {
+            if (!_touring) break;
+            Object.values(panelOf).forEach((p) => p && p.classList.remove("tour-hi"));
+            if (panelOf[s.id]) panelOf[s.id].classList.add("tour-hi");
+            cap.innerHTML = '<b>' + esc(s.label || "") + '</b> ' + esc(s.text || "");
+            await _tourStep(s.audio_b64, s.text);
+          }
+          Object.values(panelOf).forEach((p) => p && p.classList.remove("tour-hi"));
+          cap.remove(); btn.textContent = "🎙 Tour"; _touring = false;
+        }
+        $("tourBtn").onclick = () => { if (_touring) stopTour(); else startTour(); };
+        let _actx = null;
+        function playDone() {
+          try {
+            _actx = _actx || new (window.AudioContext || window.webkitAudioContext)();
+            const ctx = _actx, t0 = ctx.currentTime;
+            [880, 1320].forEach((f, i) => {                  // two-tone "ding-dong"
+              const o = ctx.createOscillator(), g = ctx.createGain(); o.type = "sine"; o.frequency.value = f;
+              const t = t0 + i * 0.13;
+              g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+              o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.18);
+            });
+          } catch (e) {}
+        }
+        function showToast(text) {
+          const el = document.createElement("div"); el.className = "toast"; el.textContent = text; document.body.appendChild(el);
+          requestAnimationFrame(() => el.classList.add("on"));
+          setTimeout(() => { el.classList.remove("on"); setTimeout(() => el.remove(), 300); }, 3200);
+        }
+        function pingDone(p) {                               // fire only when REAL work happened (>=3 steps)
+          if (!p.trace || p.trace.length < 3) return;
+          const n = p.trace.filter((s) => s.kind === "tool_call").length;
+          if (soundOn) playDone();
+          showToast(`✓ ${p.intent || "run"} done — ${n} tool${n === 1 ? "" : "s"}`);
+        }
+
+        // ---------- websocket ----------
+        let ws = null, attempts = 0;
+        function connect() {
+          ws = new WebSocket("ws://" + window.location.host + "/ws/" + sessionId);
+          ws.onopen = () => { attempts = 0; sendBtn.disabled = false; connDot.className = "dot on"; connText.textContent = "connected"; };
+          ws.onmessage = (ev) => { let p; try { p = JSON.parse(ev.data); } catch { return; }
+            if (p.type === "status") { addStatus(p.text); setWorking(true, p.text); }   // keep the cue alive + show the step
+            else if (p.type === "turn") {
+              setWorking(false);                                                          // the run finished
+              addAgentMessage(p.answer, p.intent);         // chat = PROSE only
+              addActivity(p.intent, p.trace); addData(p.data);  // trace -> Activity, structured -> right panel
+              pingDone(p); _resolveTurn();                  // unblock a re-run waiting on this turn
+            }
+            else if (p.message) { setWorking(false); addAgentMessage(p.message); _resolveTurn(); } };
+          ws.onclose = () => { setWorking(false); sendBtn.disabled = true; connDot.className = "dot off"; connText.textContent = "disconnected"; if (attempts++ < 5) setTimeout(connect, 3000 * attempts); };
+          ws.onerror = () => { connDot.className = "dot off"; };
+        }
+
+        // ---------- "working…" indicator: a notion that something is happening, send -> response ----------
+        let thinkingEl = null;
+        function setWorking(on, label) {
+          if (on) {
+            if (!thinkingEl) {
+              thinkingEl = document.createElement("div");
+              thinkingEl.className = "thinking";
+              thinkingEl.innerHTML = '<span class="spin"></span><span class="tlabel"></span>';
+              chat.appendChild(thinkingEl);
+            }
+            thinkingEl.querySelector(".tlabel").textContent = label || "working…";
+            sendBtn.disabled = true; scroll();
+          } else if (thinkingEl) {
+            thinkingEl.remove(); thinkingEl = null;
+            if (ws && ws.readyState === WebSocket.OPEN) sendBtn.disabled = false;
+          }
+        }
+        renderSessionBar();
+        loadTranscript(sessionId).finally(connect);          // refresh keeps you in the same session + history
+
+        // ---------- send ----------
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (!ws || ws.readyState !== WebSocket.OPEN) { addStatus("Not connected."); return; }
+          const text = input.value.trim();
+          if (!text && !attachedImage && !recordedAudio) return;
+          const env = { text }; if (attachedImage) env.image = attachedImage; if (recordedAudio) env.audio = recordedAudio;
+          addUserMessage(text, attachedImage);
+          try { ws.send(JSON.stringify(env)); setWorking(true, "working…"); } catch (err) { addStatus("Send failed: " + err.message); }
+          input.value = ""; attachedImage = null; recordedAudio = null; imageInput.value = ""; renderStaging();
+        });
+      });
+    </script>
+  </body>
+</html>

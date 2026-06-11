@@ -1,0 +1,46 @@
+# ── secrets — NEVER commit ───────────────────────────────────────────────
+.env
+.env.*
+env.txt
+*.pem
+*.key
+*.crt
+*.p12
+
+# ── SAP NWRFC SDK (licensed, NOT redistributable — download separately) ───
+nwrfcsdk/
+mcp_remote/nwrfcsdk/
+
+# ── runtime data / regenerable (not source) ──────────────────────────────
+logs/
+vector_store/
+tts_cache/
+kg_instances.json
+genesis_ledger.json
+adk_sessions.db
+*.db
+*.db-journal
+.adk/
+
+# ── data dumps (regenerated from SAP; keep out of a public repo) ──────────
+expand_*.json
+code_book.json
+dev_rfc.log
+
+# ── python ───────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# ── node / vite (the served bundle in static_v2/ IS committed) ────────────
+frontend/node_modules/
+frontend/dist/
+node_modules/
+
+# ── misc ─────────────────────────────────────────────────────────────────
+*.log
+*.webm
+_review_panel.png
+.DS_Store
