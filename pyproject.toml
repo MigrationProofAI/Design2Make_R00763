@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "faiss-cpu>=1.14.2",
     "fastapi>=0.115.12",
-    "google-adk==2.1.0",
+    "google-adk[db]==2.1.0",
     "litellm>=1.87.0",
     "mcp>=1.9.0",
     "networkx>=3.6.1",
