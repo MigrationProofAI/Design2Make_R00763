@@ -7,9 +7,10 @@ env.txt
 *.crt
 *.p12
 
-# ── SAP NWRFC SDK (licensed, NOT redistributable — download separately) ───
-nwrfcsdk/
-mcp_remote/nwrfcsdk/
+# ── SAP NWRFC SDK ─────────────────────────────────────────────────────────
+# Bundled (mcp_remote/nwrfcsdk/) for the OWNER's own PRIVATE cross-machine use only.
+# It is SAP-licensed and must NOT be redistributed — keep this repository PRIVATE.
+# (This is the LINUX build: .so libs. A Windows host needs the Windows NWRFC SDK instead.)
 
 # ── runtime data / regenerable (not source) ──────────────────────────────
 logs/
