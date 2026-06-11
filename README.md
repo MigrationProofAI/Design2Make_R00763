@@ -50,35 +50,35 @@ Design2Make_R00763/
 ---
 
 ## Prerequisites
-- **Python 3.13** and [`uv`](https://docs.astral.sh/uv/) (`pip install uv`).
+- **Python 3.13**. That's it — `run.bat` / `run.sh` **auto-install [`uv`](https://docs.astral.sh/uv/)**
+  (the dependency manager) if it's missing, then `uv sync` the deps.
 - An **OpenAI API key** (LLMs + embeddings + TTS).
-- For the RFC servers: access to an **SAP system over RFC** + `pyrfc`. The NWRFC SDK is **bundled**
-  (`mcp_remote/nwrfcsdk/`, **Linux** `.so` build) — so run on **Linux / WSL / Docker / a Linux VM**.
-  On a **Windows** host, replace that folder with the Windows NWRFC SDK (`.dll`s).
+- For the RFC servers: access to an **SAP system over RFC**. **No `pyrfc`** — they call the NWRFC SDK
+  directly via `ctypes`. The SDK is **bundled** (`mcp_remote/nwrfcsdk/`, **Linux** `.so`) — run on
+  **Linux / WSL / Docker / a Linux VM**; on **Windows**, swap in the Windows NWRFC SDK (`.dll`s).
 - (Optional) **Node 18+** to rebuild the React UI; not needed to run (the bundle is committed).
 
-## Setup
+## Setup & run
 
-```bash
-git clone <this repo> && cd Design2Make_R00763
-cp env.example .env              # OPENAI_API_KEY + the local SAP OData (sap.py/make.py) values
-cp env.example mcp_remote/.env   # the SAP_RFC_* values (host, system, client, user, password)
-uv sync                          # install Python deps
-pip install pyrfc                # RFC servers only — builds against mcp_remote/nwrfcsdk/
+```bat
+git clone https://github.com/MigrationProofAI/Design2Make_R00763.git
+cd Design2Make_R00763
+
+REM fill in credentials — the ONLY manual step (creds are never in the repo):
+copy env.example .env                          REM  Linux: cp env.example .env
+copy env.example mcp_remote\.env               REM  Linux: cp env.example mcp_remote/.env
+notepad .env  &  notepad mcp_remote\.env       REM  OPENAI_API_KEY, SAP OData, SAP_RFC_* values
+
+REM then ONE command — installs uv if missing, uv sync, and starts :8001 + :8002 + :8000:
+run.bat                                        REM  Linux: ./run.sh
 ```
 
-The two `.env` files are the **only** manual step — credentials are never in the repo.
+Then open **http://localhost:8000**. Search, genesis, the board, the tour/demo and screen recording
+all work **without** the RFC servers; only **MRP / demand / production-version** need them.
 
-## Run
-
-```bash
-./run.sh        # Linux / WSL / Docker — starts :8001, :8002, and :8000; Ctrl+C stops all three
-# run.bat       # Windows equivalent (needs the Windows NWRFC SDK)
-```
-
-Then open **http://localhost:8000**. The app connects to the RFC servers via `PLANNING_MCP_URL` /
-`PRODVER_MCP_URL` (defaults `:8001` / `:8002`). Search, genesis, the board, the tour/demo and screen
-recording all work **without** the RFC servers; only **MRP / demand / production-version** need them.
+> Prefer to run `uv sync` yourself first? Install uv once:
+> `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` (Windows) or
+> `curl -LsSf https://astral.sh/uv/install.sh | sh` (Linux) — then `uv sync` works.
 
 <details><summary>Start things by hand instead of <code>run.sh</code></summary>
 
