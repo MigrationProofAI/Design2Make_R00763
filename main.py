@@ -282,27 +282,63 @@ _LAST_ANSWER: dict[str, str] = {}         # session_id -> previous agent answer 
 _PREV_INTENT: dict[str, str] = {}         # session_id -> previous turn's intent
 _LESSON_BLOCK = contextvars.ContextVar("d2m_lesson_block", default="")   # injected into THIS turn
 _AVOIDED = contextvars.ContextVar("d2m_avoided", default=0)              # BOM-guard blocks this turn
+# A ContextVar propagates DOWN into the model callback (so _LESSON_BLOCK / _TURN_TOKEN are readable
+# there) but NOT back UP to this task. So injection CONFIRMATION crosses back via a module-level set
+# keyed by a per-turn token -- the request-level check that gates the 'injected' counter.
+_TURN_TOKEN = contextvars.ContextVar("d2m_turn", default="")             # per-turn id (read in the callback)
+_INJECTED_TOKENS: set = set()                                            # tokens whose block actually landed
+_TURN_SEQ = [0]                                                          # monotonic turn counter
+_LESSON_MARKER = "LESSONS (past sessions)"                               # unique substring of the block
 
 _BOM_WRITE_TOOLS = {"create_bom", "add_bom_component", "remove_bom_component"}
 _REFLECT_RE = re.compile(r"^\s*/reflect\b|what (did|have) you learn|what could (be|we) improve", re.I)
 
 
+def _si_text(si) -> str:
+    """Flatten a system_instruction (str | Content | parts) to text for assertion."""
+    if si is None:
+        return ""
+    if isinstance(si, str):
+        return si
+    try:
+        return " ".join(getattr(p, "text", "") or "" for p in (getattr(si, "parts", None) or []))
+    except Exception:
+        return str(si)
+
+
 def _inject_lessons(llm_request):
-    """Soft lane: append THIS turn's LESSONS block to the system instruction."""
+    """Soft lane: put THIS turn's LESSONS block in front of the model, then ASSERT at the request
+    level that it actually landed. The 'injected' counter is gated on this check (see the WS loop),
+    so the Learning line can never over-report. Falls back to a leading user content if the
+    system-instruction path isn't writable in this ADK build -- so lessons still reach the model."""
     block = _LESSON_BLOCK.get()
     if not block:
         return
     cfg = getattr(llm_request, "config", None)
-    if cfg is None:
-        return
-    si = getattr(cfg, "system_instruction", None)
-    if si is None or isinstance(si, str):
-        cfg.system_instruction = (si or "") + block
-    else:
+    if cfg is not None:                          # preferred: append to the system instruction
+        si = getattr(cfg, "system_instruction", None)
         try:
-            si.parts.append(types.Part(text=block))
+            if si is None or isinstance(si, str):
+                cfg.system_instruction = (si or "") + block
+            else:
+                si.parts.append(types.Part(text=block))
         except Exception:
-            cfg.system_instruction = str(si) + block
+            try:
+                cfg.system_instruction = _si_text(si) + block
+            except Exception:
+                pass
+    present = bool(cfg) and _LESSON_MARKER in _si_text(getattr(cfg, "system_instruction", None))
+    if not present:                              # fallback: a leading user content the model WILL see
+        try:
+            (llm_request.contents or []).insert(0, types.Content(role="user", parts=[types.Part(text=block)]))
+            present = any(_LESSON_MARKER in (getattr(p, "text", "") or "")
+                          for c in (llm_request.contents or [])[:1] for p in (c.parts or []))
+        except Exception:
+            present = False
+    if present:                                  # request-level confirmation -> crosses tasks via the set
+        tok = _TURN_TOKEN.get()
+        if tok:
+            _INJECTED_TOKENS.add(tok)
 
 
 def _bom_guard(tool, args, tool_context):
@@ -1230,14 +1266,17 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
             logging.info(f"[router] {session_id}: intent='{intent}'")
             # --- LEARNING: capture a correction of the PREVIOUS answer; recall lessons for THIS turn ---
             _RUN_LESSONS[session_id] = []
+            _turn_tok = ""
             if learning.ENABLED:
                 await asyncio.to_thread(learning.capture_correction, _PREV_INTENT.get(session_id, ""),
                                         summary["text"], _LAST_ANSWER.get(session_id, ""))
                 _lessons = await asyncio.to_thread(learning.recall, intent, summary["text"])
                 _RUN_LESSONS[session_id] = _lessons
                 _LESSON_BLOCK.set(learning.format_block(_lessons))
-                if _lessons:
-                    learning.log_event("lesson_injected", {"intent": intent, "ids": [le["id"] for le in _lessons]})
+                _TURN_SEQ[0] += 1
+                _turn_tok = f"{session_id}:{_TURN_SEQ[0]}"   # the callback confirms injection against this
+                _TURN_TOKEN.set(_turn_tok)
+                _INJECTED_TOKENS.discard(_turn_tok)
             runner = get_runner(intent)
 
             try:
@@ -1255,12 +1294,21 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
                         _SESSION_STEPS.setdefault(session_id, []).extend(steps)
                         _LAST_ANSWER[session_id] = final or ""
                         _PREV_INTENT[session_id] = intent
-                        inj = _RUN_LESSONS.get(session_id, [])
+                        recalled = _RUN_LESSONS.get(session_id, [])
+                        injected_ok = _turn_tok in _INJECTED_TOKENS   # request-level: did the block actually land?
+                        _INJECTED_TOKENS.discard(_turn_tok)           # cleanup (the set never grows)
+                        inj = recalled if injected_ok else []   # COUNTER BEHIND THE CHECK -- no over-report
                         avoided = sum(1 for s in steps if s.get("kind") == "tool_result"
                                       and "blocked by a learned guard" in str(s.get("result", "")).lower())
                         repeated = _count_repeated_mistakes(steps)
                         msg["learning"] = {"line": learning.learning_line(inj, repeated, avoided),
                                            "injected": len(inj), "avoided": avoided, "repeated": repeated}
+                        if inj:
+                            learning.log_event("lesson_injected", {"intent": intent, "n": len(inj),
+                                                                   "ids": [le["id"] for le in inj]})
+                        elif recalled:
+                            logging.warning(f"[learning] recalled {len(recalled)} lesson(s) but injection NOT "
+                                            f"confirmed at request level (intent '{intent}')")
                         if repeated:
                             learning.log_event("mistake_repeated", {"intent": intent, "n": repeated})
                         if (avoided or repeated) and intent in ("create_change", "make"):
