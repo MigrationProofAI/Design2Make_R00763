@@ -283,7 +283,7 @@ _SESSION_STEPS: dict[str, list] = {}      # session_id -> accumulated trace step
 _LAST_ANSWER: dict[str, str] = {}         # session_id -> previous agent answer (capture-on-correction)
 _PREV_INTENT: dict[str, str] = {}         # session_id -> previous turn's intent
 _LESSON_BLOCK = contextvars.ContextVar("d2m_lesson_block", default="")   # injected into THIS turn
-_AVOIDED = contextvars.ContextVar("d2m_avoided", default=0)              # BOM-guard blocks this turn
+_AVOIDED_COUNT: dict = {}                                                # token -> guard blocks (crosses tasks)
 # A ContextVar propagates DOWN into the model callback (so _LESSON_BLOCK / _TURN_TOKEN are readable
 # there) but NOT back UP to this task. So injection CONFIRMATION crosses back via a module-level set
 # keyed by a per-turn token -- the request-level check that gates the 'injected' counter.
@@ -293,7 +293,14 @@ _TURN_SEQ = [0]                                                          # monot
 _LESSON_MARKER = "LESSONS (past sessions)"                               # unique substring of the block
 
 _BOM_WRITE_TOOLS = {"create_bom", "add_bom_component", "remove_bom_component"}
-_REFLECT_RE = re.compile(r"^\s*/reflect\b|what (did|have) you learn|what could (be|we) improve", re.I)
+# Fire the Reflector on /reflect, "what did/have you|we learn(ed)", "what we/you learned",
+# "what could be/we improve", or "did we update ... knowledge/learning". Kept specific to reflection.
+_REFLECT_RE = re.compile(
+    r"^\s*/reflect\b"
+    r"|what (did|have|do)\s+(you|we)\s+learn"
+    r"|(things|what)\s+(we|you)\b.{0,25}\blearned\b"
+    r"|what (could|can|should) (be|we|you) improve"
+    r"|(updated?|capture[d]?|store[d]?)\b.{0,25}(knowledge|learning|lesson)", re.I)
 
 
 def _si_text(si) -> str:
@@ -354,7 +361,9 @@ def _bom_guard(tool, args, tool_context):
         s in str(v).lower() for v in a.values() for s in ("billofmaterial", "materialbom", "/bom"))
     if name in _BOM_WRITE_TOOLS or via_generic:
         learning.log_event("mistake_avoided", {"tool": name, "guard": "bom_in_create_material"})
-        _AVOIDED.set(_AVOIDED.get() + 1)
+        tok = _TURN_TOKEN.get()              # confirm to the WS loop across tasks (like injection)
+        if tok:
+            _AVOIDED_COUNT[tok] = _AVOIDED_COUNT.get(tok, 0) + 1
         return {"blocked": True,
                 "message": ("Blocked by a learned guard: a create-material flow must NOT write BOM "
                             "items. Finish creating the material first; BOM changes are a SEPARATE "
@@ -1300,9 +1309,8 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
                         injected_ok = _turn_tok in _INJECTED_TOKENS   # request-level: did the block actually land?
                         _INJECTED_TOKENS.discard(_turn_tok)           # cleanup (the set never grows)
                         inj = recalled if injected_ok else []   # COUNTER BEHIND THE CHECK -- no over-report
-                        avoided = sum(1 for s in steps if s.get("kind") == "tool_result"
-                                      and "blocked by a learned guard" in str(s.get("result", "")).lower())
-                        repeated = _count_repeated_mistakes(steps)
+                        avoided = _AVOIDED_COUNT.pop(_turn_tok, 0)    # guard blocks (reliable; not trace-scraped)
+                        repeated = _count_repeated_mistakes(steps) if intent == "create_change" else 0
                         msg["learning"] = {"line": learning.learning_line(inj, repeated, avoided),
                                            "injected": len(inj), "avoided": avoided, "repeated": repeated}
                         if inj:
