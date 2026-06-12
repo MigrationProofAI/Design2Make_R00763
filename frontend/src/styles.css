@@ -135,6 +135,9 @@ button { font-family: inherit; }
   font-size: 11px; padding: 3px 9px; margin-top: 8px; cursor: pointer; transition: all .18s var(--ease); }
 .explain-btn:hover { background: var(--panel-2); color: var(--ink); } .explain-btn:disabled { opacity: .5; }
 .act-explain { font-size: 12px; color: var(--ink); background: var(--accent-soft); border-left: 3px solid var(--accent); padding: 7px 11px; margin-top: 8px; border-radius: 4px; line-height: 1.5; }
+.act-learn { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); background: var(--panel-2); border-left: 3px solid var(--ink-3); padding: 5px 10px; margin-top: 8px; border-radius: 4px; }
+.act-learn.good { border-left-color: var(--auto); color: var(--auto); }
+.act-learn.bad { border-left-color: var(--reject); color: var(--reject); }
 
 /* ---- structured data (dark terminal blocks, like the decision record) ---- */
 .data-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); overflow: hidden; animation: rise .3s var(--ease); }

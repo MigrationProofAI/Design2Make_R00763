@@ -45,3 +45,9 @@ node_modules/
 *.webm
 _review_panel.png
 .DS_Store
+
+# learning loop (runtime data)
+lessons.jsonl
+promotions.jsonl
+learning_ledger.jsonl
+logs/learning_events.jsonl

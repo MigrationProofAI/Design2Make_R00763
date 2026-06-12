@@ -97,7 +97,7 @@ export default function App() {
       else if (p.type === "turn") {
         setWorking(false);
         addMsg({ role: "agent", text: p.answer || "(no answer)", intent: p.intent });
-        setActivity((xs) => [...xs, { intent: p.intent, steps: p.trace || [], ts: ts() }]);
+        setActivity((xs) => [...xs, { intent: p.intent, steps: p.trace || [], ts: ts(), learning: p.learning }]);
         const cards = Array.isArray(p.data) ? p.data : (p.data && p.data.payload != null ? [p.data] : []);
         if (cards.length) setData((xs) => [...xs, ...cards.map((d) => ({ tool: d.tool, payload: d.payload, ts: ts() }))]);
         setGate(p.gate || null);
@@ -465,6 +465,7 @@ function ActivityTurn({ turn }) {
       <div className="act-struct">🧠 {STRUCT[turn.intent] || "agent"}</div>
       {(turn.steps || []).map((s, i) => <Step key={i} s={s} />)}
       {(!turn.steps || !turn.steps.length) && <div className="act-text">(no tool calls)</div>}
+      {turn.learning && <div className={"act-learn" + (turn.learning.repeated ? " bad" : turn.learning.avoided ? " good" : "")}>🎓 Learning · {turn.learning.line}</div>}
       {explain && <div className="act-explain">💡 {explain}</div>}
       {!explain && <button className="explain-btn" disabled={busy} onClick={doExplain}>{busy ? "💡 …" : "💡 Explain"}</button>}
     </div>

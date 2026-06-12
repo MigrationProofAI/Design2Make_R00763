@@ -31,7 +31,9 @@ litellm.drop_params = True
 from create_pipeline import build_create_pipeline, READONLY_SAP_TOOLS   # at top
 from validate_pipeline import build_validation_pipeline
 from rule_engine_glue import run_rule_engine
-from knowledge import remember, knowledge_block   # shared learning loop
+from knowledge import remember, knowledge_block   # shared (human-curated) knowledge base
+import contextvars
+import learning                                    # the Minimal Viable Learning Loop (flag D2M_LEARNING)
 
 # Windows-only: the Proactor event loop raises a benign ConnectionResetError
 # (WinError 10054) inside _call_connection_lost when a socket/pipe is torn down abruptly
@@ -264,10 +266,80 @@ class _TokenTrimPlugin(BasePlugin):
 
     async def before_model_callback(self, *, callback_context, llm_request):
         _trim_context(callback_context, llm_request)
+        if learning.ENABLED:
+            _inject_lessons(llm_request)        # soft lane: recalled LESSONS -> system instruction
         return None
 
 
 _TRIM_PLUGIN = _TokenTrimPlugin()
+
+
+# ====================== LEARNING LOOP wiring (flag D2M_LEARNING) ======================
+# Code decides WHEN to remember; the LLM only supplies content. Engine in learning.py.
+_RUN_LESSONS: dict[str, list] = {}        # session_id -> lessons recalled this turn (for the line)
+_SESSION_STEPS: dict[str, list] = {}      # session_id -> accumulated trace steps (for the Reflector)
+_LAST_ANSWER: dict[str, str] = {}         # session_id -> previous agent answer (capture-on-correction)
+_PREV_INTENT: dict[str, str] = {}         # session_id -> previous turn's intent
+_LESSON_BLOCK = contextvars.ContextVar("d2m_lesson_block", default="")   # injected into THIS turn
+_AVOIDED = contextvars.ContextVar("d2m_avoided", default=0)              # BOM-guard blocks this turn
+
+_BOM_WRITE_TOOLS = {"create_bom", "add_bom_component", "remove_bom_component"}
+_REFLECT_RE = re.compile(r"^\s*/reflect\b|what (did|have) you learn|what could (be|we) improve", re.I)
+
+
+def _inject_lessons(llm_request):
+    """Soft lane: append THIS turn's LESSONS block to the system instruction."""
+    block = _LESSON_BLOCK.get()
+    if not block:
+        return
+    cfg = getattr(llm_request, "config", None)
+    if cfg is None:
+        return
+    si = getattr(cfg, "system_instruction", None)
+    if si is None or isinstance(si, str):
+        cfg.system_instruction = (si or "") + block
+    else:
+        try:
+            si.parts.append(types.Part(text=block))
+        except Exception:
+            cfg.system_instruction = str(si) + block
+
+
+def _bom_guard(tool, args, tool_context):
+    """HARD lane (first promotion): a create-material flow may NOT write BOM items -> block + redirect.
+    Returns a dict to short-circuit the call (ADK before_tool_callback contract)."""
+    if not learning.ENABLED:
+        return None
+    name = getattr(tool, "name", "") or ""
+    a = args or {}
+    via_generic = name in ("change_make_object", "query_sap", "create_change_object") and any(
+        s in str(v).lower() for v in a.values() for s in ("billofmaterial", "materialbom", "/bom"))
+    if name in _BOM_WRITE_TOOLS or via_generic:
+        learning.log_event("mistake_avoided", {"tool": name, "guard": "bom_in_create_material"})
+        _AVOIDED.set(_AVOIDED.get() + 1)
+        return {"blocked": True,
+                "message": ("Blocked by a learned guard: a create-material flow must NOT write BOM "
+                            "items. Finish creating the material first; BOM changes are a SEPARATE "
+                            "request ('make' / 'fix the BOM' once the material exists).")}
+    return None
+
+
+def _count_repeated_mistakes(steps: list[dict]) -> int:
+    """A known mistake that actually slipped past (a BOM write that ran, not one the guard blocked)."""
+    n = 0
+    for s in steps or []:
+        if s.get("kind") == "tool_result" and s.get("tool") in _BOM_WRITE_TOOLS \
+           and "blocked by a learned guard" not in str(s.get("result", "")).lower():
+            n += 1
+    return n
+
+
+def _with_bom_guard(pipeline):
+    """Attach the BOM guard (before_tool_callback) to every sub-agent of the create-material flow."""
+    if learning.ENABLED:
+        for a in (getattr(pipeline, "sub_agents", None) or []):
+            a.before_tool_callback = _bom_guard
+    return pipeline
 
 
 def create_agent():
@@ -1107,7 +1179,7 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
     so each MCP server is launched only when first needed."""
     builders = {
         "search": build_search_agent,            # exact + semantic + ontology + web
-        "create_change": lambda: build_create_pipeline(before_model_callback=_trim_context),
+        "create_change": lambda: _with_bom_guard(build_create_pipeline(before_model_callback=_trim_context)),
         "make": build_make_agent,                # PIR / cost / BOM / routing (around a material)
         "genesis": build_genesis_agent,          # whole assembly from an image (run_genesis)
         "planning": build_planning_agent,        # MRP + demand via the REMOTE planning server
@@ -1142,10 +1214,30 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
                 await websocket.send_text(json.dumps({"type": "status", "text": note}))
 
             summary = _content_summary(content)
+            # --- LEARNING capture trigger: /reflect or "what did you learn" -> Reflector, skip the run ---
+            if learning.ENABLED and summary["text"] and _REFLECT_RE.search(summary["text"]):
+                kept = await asyncio.to_thread(learning.reflect, last_intent or "session",
+                                               _SESSION_STEPS.get(session_id, []), "reflect")
+                body = ("🧠 **Captured " + str(len(kept)) + " lesson(s)** for future sessions:\n"
+                        + "\n".join("- (" + k["lesson_type"] + ") " + (k["correction"] or k["mistake_or_insight"])
+                                    for k in kept)) if kept else "🧠 Nothing durable to capture from this session yet."
+                await websocket.send_text(json.dumps(
+                    {"type": "turn", "intent": "reflect", "answer": body, "trace": [], "data": None}))
+                continue
             intent = await asyncio.to_thread(
                 classify_intent, summary["text"], summary["image"], last_intent)
             last_intent = intent
             logging.info(f"[router] {session_id}: intent='{intent}'")
+            # --- LEARNING: capture a correction of the PREVIOUS answer; recall lessons for THIS turn ---
+            _RUN_LESSONS[session_id] = []
+            if learning.ENABLED:
+                await asyncio.to_thread(learning.capture_correction, _PREV_INTENT.get(session_id, ""),
+                                        summary["text"], _LAST_ANSWER.get(session_id, ""))
+                _lessons = await asyncio.to_thread(learning.recall, intent, summary["text"])
+                _RUN_LESSONS[session_id] = _lessons
+                _LESSON_BLOCK.set(learning.format_block(_lessons))
+                if _lessons:
+                    learning.log_event("lesson_injected", {"intent": intent, "ids": [le["id"] for le in _lessons]})
             runner = get_runner(intent)
 
             try:
@@ -1156,10 +1248,28 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
                          "trace": [], "data": None}))
                 else:
                     final, steps, data = await run_with_trace(runner, session_id, content, intent)
-                    await websocket.send_text(json.dumps(
-                        {"type": "turn", "intent": intent,
-                         "answer": final or "(no answer)", "trace": _trim_steps(steps),
-                         "data": data, "gate": _detect_gate(steps, final, intent)}))
+                    msg = {"type": "turn", "intent": intent,
+                           "answer": final or "(no answer)", "trace": _trim_steps(steps),
+                           "data": data, "gate": _detect_gate(steps, final, intent)}
+                    if learning.ENABLED:                  # measure: the one "Learning" line for the trace panel
+                        _SESSION_STEPS.setdefault(session_id, []).extend(steps)
+                        _LAST_ANSWER[session_id] = final or ""
+                        _PREV_INTENT[session_id] = intent
+                        inj = _RUN_LESSONS.get(session_id, [])
+                        avoided = sum(1 for s in steps if s.get("kind") == "tool_result"
+                                      and "blocked by a learned guard" in str(s.get("result", "")).lower())
+                        repeated = _count_repeated_mistakes(steps)
+                        msg["learning"] = {"line": learning.learning_line(inj, repeated, avoided),
+                                           "injected": len(inj), "avoided": avoided, "repeated": repeated}
+                        if repeated:
+                            learning.log_event("mistake_repeated", {"intent": intent, "n": repeated})
+                        if (avoided or repeated) and intent in ("create_change", "make"):
+                            learning.seed_ledger_before()          # the BEFORE half (on file)
+                            learning.record_ledger("create-material flow attempts BOM-item write",
+                                                   "after" if avoided else "repeat",
+                                                   {"intent": intent, "blocked_by_guard": avoided,
+                                                    "slipped_through": repeated})
+                    await websocket.send_text(json.dumps(msg))
             except Exception as run_err:
                 # A failed run (e.g. the model's context window overflowed) must NOT kill the socket --
                 # surface it, clear the client's "working" cue, and keep the session alive for the next turn.
@@ -1180,6 +1290,15 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
     except WebSocketDisconnect:
         logging.info(f"Client {session_id} disconnected.")
     finally:
+        # --- LEARNING: reflect on the whole session at close (deterministic capture hook) ---
+        if learning.ENABLED and _SESSION_STEPS.get(session_id):
+            try:
+                await asyncio.to_thread(learning.reflect, last_intent or "session",
+                                        _SESSION_STEPS.get(session_id, []), "close")
+            except Exception as e:
+                logging.warning(f"[learning] close reflect failed: {e}")
+        for _d in (_SESSION_STEPS, _RUN_LESSONS, _LAST_ANSWER, _PREV_INTENT):
+            _d.pop(session_id, None)
         # Close all per-intent runners CONCURRENTLY, each bounded by a short timeout, so
         # shutdown can't hang on a slow MCP stdio-subprocess teardown. A session may have
         # several servers up (sap/make/vector/graph/serper); closing them serially with no
