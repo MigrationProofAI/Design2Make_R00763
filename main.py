@@ -53,6 +53,8 @@ if sys.platform == "win32":
     _ProactorBasePipeTransport._call_connection_lost = _quiet_call_connection_lost
 
 load_dotenv()
+# learning.py read its flag at import (before .env loaded); re-read now so D2M_LEARNING in .env works too.
+learning.ENABLED = os.getenv("D2M_LEARNING", "0").lower() in ("1", "true", "yes", "on")
 
 # One knob for the chat model used by every agent + the router classifier. Defaults to the
 # cheap gpt-4o-mini; override with OPENAI_MODEL in .env (e.g. gpt-5-nano) -- no code edits.
