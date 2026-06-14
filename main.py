@@ -70,6 +70,33 @@ _HERE = Path(__file__).resolve().parent      # anchor asset dirs to this file, n
 STATIC_DIR = _HERE / "static"
 LOG_DIR = Path("logs")          # per-session JSONL trace logs land here
 
+# In-memory ring buffer of recent backend log records, exposed at /api/logs so the
+# console stream (esp. the [ctx] context-budget lines) can be inspected without scraping
+# the terminal. Capped, so it can never grow unbounded. Console behaviour is preserved:
+# an explicit stderr handler at WARNING (replacing logging.lastResort, which a custom
+# handler would otherwise disable), while the ring captures INFO+ for diagnosis.
+import collections as _collections
+_LOG_RING = _collections.deque(maxlen=3000)
+
+
+class _RingLogHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            _LOG_RING.append({"t": record.created, "lvl": record.levelname,
+                              "name": record.name, "msg": record.getMessage()})
+        except Exception:
+            pass
+
+
+_root_logger = logging.getLogger()
+if not any(isinstance(h, _RingLogHandler) for h in _root_logger.handlers):
+    _root_logger.setLevel(logging.INFO)
+    _console_handler = logging.StreamHandler(sys.stderr)
+    _console_handler.setLevel(logging.WARNING)        # console stays as quiet as before
+    _console_handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    _root_logger.addHandler(_console_handler)
+    _root_logger.addHandler(_RingLogHandler(level=logging.INFO))
+
 # DURABLE sessions: persisted to SQLite so a session survives an app restart and can be
 # reconnected / reloaded by id (vs InMemory, which dies with the process). The genesis run is
 # the reason -- a mid-run stop is recoverable because re-running genesis is idempotent
@@ -102,6 +129,9 @@ sap_server_params = StdioConnectionParams(
 
 serper_server_params = StdioConnectionParams(
     server_params=StdioServerParameters(command=sys.executable, args=_srv("serper.py")),
+    timeout=30,   # web search (Serper -> Google) routinely exceeds the 5s default; the timeouts
+                  # were causing the agent to RETRY (12 materials -> 65 google_search calls), which
+                  # then blew the turn's call budget and half-rendered the price cards.
 )
 
 vector_server_params = StdioConnectionParams(
@@ -166,6 +196,39 @@ def _ntok(s) -> int:
         return len(str(s)) // 4
 
 
+def _strip_card_from_fr(fr) -> int:
+    """Drop the @@DATA@@ UI-card block from a function_response the MODEL will replay. The card JSON
+    powers the Data panel (extracted separately in run_with_trace from the streamed events, so the UI
+    is untouched) and the model never needs it -- only the readable text before @@DATA@@. Removes
+    ~13k chars per genesis result (+ every make-tool card) from the context window. Mutates in place;
+    returns the number of chars removed (so the trimmer can log/verify the saving)."""
+    sentinel = "@@DATA@@"
+    resp = getattr(fr, "response", None)
+    removed = 0
+    if isinstance(resp, str):
+        if sentinel in resp:
+            new = resp.split(sentinel, 1)[0].rstrip()
+            removed = len(resp) - len(new)
+            fr.response = new
+        return removed
+    if isinstance(resp, dict):
+        content = resp.get("content")
+        if isinstance(content, list):
+            for part in content:
+                t = part.get("text") if isinstance(part, dict) else None
+                if isinstance(t, str) and sentinel in t:
+                    nt = t.split(sentinel, 1)[0].rstrip()
+                    removed += len(t) - len(nt)
+                    part["text"] = nt
+        for k in ("result", "text"):                      # other shapes: a flat string field
+            v = resp.get(k)
+            if isinstance(v, str) and sentinel in v:
+                nv = v.split(sentinel, 1)[0].rstrip()
+                removed += len(v) - len(nv)
+                resp[k] = nv
+    return removed
+
+
 def _trim_context(callback_context, llm_request):
     """before_model_callback -- keep the request under the 128k TOKEN window (tiktoken-measured, not
     chars). Escalating passes so a long session OR a single fat turn can't ContextWindowExceededError:
@@ -213,14 +276,28 @@ def _trim_context(callback_context, llm_request):
             kept = [types.Part(text="[image omitted from history]")]
         contents[idx].parts = kept
 
+    # (1b) drop @@DATA@@ UI-card blocks from EVERY function_response -- pure waste in the model
+    #      context (the card powers the Data panel, extracted separately). Runs every call, regardless
+    #      of budget: ~13k chars/genesis + every make-tool card, gone before we even measure.
+    _card_removed = 0
+    for c in contents:
+        for fr in _frs(c):
+            _card_removed += _strip_card_from_fr(fr)
+    if _card_removed:
+        logging.info(f"[ctx] stripped @@DATA@@ UI-card blocks from model context (-{_card_removed} chars)")
+
     total = sum(_csize(c) for c in contents)
 
-    # (0) MEASURE near the ceiling -- log WHAT is eating it (top contents by tokens)
+    # (0) MEASURE near the ceiling -- all at INFO. Trimming a long session is the DESIGNED behaviour
+    #     (compaction enabling endless work), NOT an error -- so it must not scream WARNING every turn.
+    #     The only real WARNING is pass (4): a single LIVE turn that can't be made to fit even after
+    #     dropping all history. "monitoring" => under budget; "trimming (routine)" => fitting the window.
     if total > 0.8 * TOKEN_BUDGET:
         top = sorted(((_csize(c), i, getattr(c, "role", "?")) for i, c in enumerate(contents)),
                      reverse=True)[:6]
-        logging.warning(f"[ctx] {total} tok / {len(contents)} msgs (budget {TOKEN_BUDGET}); top: "
-                        + " ".join(f"#{i}:{role}={n}t" for n, i, role in top))
+        state = "trimming (routine)" if total > TOKEN_BUDGET else "monitoring"
+        logging.info(f"[ctx] {total} tok / {len(contents)} msgs (budget {TOKEN_BUDGET}) -- {state}; top: "
+                     + " ".join(f"#{i}:{role}={n}t" for n, i, role in top))
     if total <= TOKEN_BUDGET:
         return None
 
@@ -268,8 +345,9 @@ class _TokenTrimPlugin(BasePlugin):
 
     async def before_model_callback(self, *, callback_context, llm_request):
         _trim_context(callback_context, llm_request)
-        if learning.ENABLED:
-            _inject_lessons(llm_request)        # soft lane: recalled LESSONS -> system instruction
+        if learning.ENABLED and _inject_lessons(llm_request):
+            logging.info(f"[learning] LESSONS injected -> agent "      # 🎓 per-agent confirmation; on a
+                         f"'{getattr(callback_context, 'agent_name', '?')}'")  # board turn, look for each assessor
         return None
 
 
@@ -283,6 +361,9 @@ _SESSION_STEPS: dict[str, list] = {}      # session_id -> accumulated trace step
 _LAST_ANSWER: dict[str, str] = {}         # session_id -> previous agent answer (capture-on-correction)
 _PREV_INTENT: dict[str, str] = {}         # session_id -> previous turn's intent
 _LESSON_BLOCK = contextvars.ContextVar("d2m_lesson_block", default="")   # injected into THIS turn
+_LAST_LESSON_BLOCK = [""]   # module-level mirror: ContextVars are copied into asyncio tasks at CREATE
+                            # time, but the boardroom's ParallelAgent assessors can miss it -> the
+                            # callback falls back to this so EVERY agent (incl. assessors) gets lessons.
 _AVOIDED_COUNT: dict = {}                                                # token -> guard blocks (crosses tasks)
 # A ContextVar propagates DOWN into the model callback (so _LESSON_BLOCK / _TURN_TOKEN are readable
 # there) but NOT back UP to this task. So injection CONFIRMATION crosses back via a module-level set
@@ -320,9 +401,9 @@ def _inject_lessons(llm_request):
     level that it actually landed. The 'injected' counter is gated on this check (see the WS loop),
     so the Learning line can never over-report. Falls back to a leading user content if the
     system-instruction path isn't writable in this ADK build -- so lessons still reach the model."""
-    block = _LESSON_BLOCK.get()
-    if not block:
-        return
+    block = _LESSON_BLOCK.get() or _LAST_LESSON_BLOCK[0]   # ContextVar for serial agents; the mirror
+    if not block:                                          # reaches the boardroom's PARALLEL assessors
+        return False
     cfg = getattr(llm_request, "config", None)
     if cfg is not None:                          # preferred: append to the system instruction
         si = getattr(cfg, "system_instruction", None)
@@ -348,6 +429,7 @@ def _inject_lessons(llm_request):
         tok = _TURN_TOKEN.get()
         if tok:
             _INJECTED_TOKENS.add(tok)
+    return present
 
 
 def _bom_guard(tool, args, tool_context):
@@ -1033,6 +1115,12 @@ def _is_card(tool: str, payload) -> bool:
     """True if this tool result renders as a typed card (vs. raw exploration JSON)."""
     if isinstance(payload, dict) and payload.get("kind") in _CARD_KINDS:
         return True
+    # A 0-match search is not a card: genesis fires search_materials once per component to dedup-
+    # check, all 0-match -> they'd flood the Data panel with empty cards (and persist into the trace).
+    # The GenesisCard rolls them up; a real user search with 0 hits is reported in the agent's text.
+    if tool == "search_materials" and isinstance(payload, dict) and not (
+            payload.get("materials") or payload.get("total_matches")):
+        return False
     return tool in _CARD_TOOLS and isinstance(payload, (dict, list))
 
 
@@ -1261,13 +1349,21 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
                 await websocket.send_text(json.dumps({"type": "status", "text": note}))
 
             summary = _content_summary(content)
-            # --- LEARNING capture trigger: /reflect or "what did you learn" -> Reflector, skip the run ---
+            # --- LEARNING capture trigger: /reflect [session_id] or "what did you learn" -> Reflector, skip the run ---
             if learning.ENABLED and summary["text"] and _REFLECT_RE.search(summary["text"]):
-                kept = await asyncio.to_thread(learning.reflect, last_intent or "session",
-                                               _SESSION_STEPS.get(session_id, []), "reflect")
-                body = ("🧠 **Captured " + str(len(kept)) + " lesson(s)** for future sessions:\n"
-                        + "\n".join("- (" + k["lesson_type"] + ") " + (k["correction"] or k["mistake_or_insight"])
-                                    for k in kept)) if kept else "🧠 Nothing durable to capture from this session yet."
+                _sid_m = re.search(r"/reflect\s+([A-Za-z0-9_-]{6,})", summary["text"])
+                if _sid_m:                              # backfill a past recorded session by id
+                    _sid = _sid_m.group(1)
+                    kept = await asyncio.to_thread(learning.reflect_session, _sid)
+                    head = (f"🧠 **Backfilled session `{_sid}`** — captured {len(kept)} lesson(s):\n" if kept
+                            else f"🧠 No durable lessons in session `{_sid}` (or no trace on file).")
+                else:                                   # reflect on the live, in-progress session
+                    kept = await asyncio.to_thread(learning.reflect, last_intent or "session",
+                                                   _SESSION_STEPS.get(session_id, []), "reflect")
+                    head = (f"🧠 **Captured {len(kept)} lesson(s)** for future sessions:\n" if kept
+                            else "🧠 Nothing durable to capture from this session yet.")
+                body = head + ("\n".join("- (" + k["lesson_type"] + ") " + (k["correction"] or k["mistake_or_insight"])
+                                         for k in kept) if kept else "")
                 await websocket.send_text(json.dumps(
                     {"type": "turn", "intent": "reflect", "answer": body, "trace": [], "data": None}))
                 continue
@@ -1283,7 +1379,9 @@ async def run_adk_agent_session(websocket: WebSocket, session_id: str):
                                         summary["text"], _LAST_ANSWER.get(session_id, ""))
                 _lessons = await asyncio.to_thread(learning.recall, intent, summary["text"])
                 _RUN_LESSONS[session_id] = _lessons
-                _LESSON_BLOCK.set(learning.format_block(_lessons))
+                _block = learning.format_block(_lessons)
+                _LESSON_BLOCK.set(_block)
+                _LAST_LESSON_BLOCK[0] = _block       # mirror for the boardroom's parallel assessors
                 _TURN_SEQ[0] += 1
                 _turn_tok = f"{session_id}:{_TURN_SEQ[0]}"   # the callback confirms injection against this
                 _TURN_TOKEN.set(_turn_tok)
@@ -1452,14 +1550,21 @@ def _session_summary(full) -> tuple[str, int]:
 
 
 def _events_to_turns(events) -> list:
-    """Flatten events to chat turns [{role, text}] -- skips pure tool-call/result events."""
+    """Flatten events to chat turns [{role, text, image?}] -- skips pure tool-call/result events.
+    Sets an `image` marker on user turns that carried an inline image, so a reloaded session SHOWS
+    that a picture was pasted (the bytes are in the stored event; we surface only a lightweight flag)."""
     out = []
     for ev in events or []:
         role = getattr(getattr(ev, "content", None), "role", None)
+        parts = getattr(getattr(ev, "content", None), "parts", None) or []
         txt = _event_text(ev)
-        if not txt:
+        has_img = role == "user" and any(getattr(p, "inline_data", None) for p in parts)
+        if not txt and not has_img:
             continue
-        out.append({"role": "user" if role == "user" else "agent", "text": txt})
+        turn = {"role": "user" if role == "user" else "agent", "text": txt}
+        if has_img:
+            turn["image"] = True            # marker only (a thumbnail would re-encode the bytes)
+        out.append(turn)
     return out
 
 
@@ -1505,8 +1610,53 @@ async def api_session_trace(sid: str):
             cur = {"intent": rec.get("intent", ""), "input": rec.get("input", {}), "steps": []}
             turns.append(cur)
         elif cur is not None:
+            # Strip 0-match search_materials cards persisted before the _is_card fix, so reloading
+            # an OLD session no longer floods the Data panel with empty genesis dedup-probe cards.
+            if rec.get("tool") == "search_materials" and isinstance(rec.get("card"), dict) and not (
+                    rec["card"].get("materials") or rec["card"].get("total_matches")):
+                rec.pop("card", None)
             cur["steps"].append(rec)
     return turns
+
+
+@app.get("/api/logs")
+async def api_logs(limit: int = 200, level: str = "", contains: str = ""):
+    """Recent backend log records (ring buffer). Filter with ?level=WARNING and/or
+    ?contains=[ctx] ; ?limit caps how many of the most-recent matches are returned."""
+    items = list(_LOG_RING)
+    if level:
+        lv = level.upper()
+        items = [r for r in items if r["lvl"] == lv]
+    if contains:
+        c = contains.lower()
+        items = [r for r in items if c in r["msg"].lower()]
+    return {"count": len(items), "records": items[-max(1, min(limit, 2000)):]}
+
+
+@app.get("/api/promotions")
+async def api_promotions():
+    """The learning loop's promotion queue -- lessons that recurred or were corrected, routed by type
+    to a deterministic artifact (guard / assurance check / rule). Human-gated: 'queued' until a check
+    is built and learning.apply_promotion() marks it 'applied' (which also retires the soft lesson)."""
+    promos = learning.list_promotions()
+    return {"queued": sum(1 for p in promos if p.get("status") == "queued"),
+            "applied": sum(1 for p in promos if p.get("status") == "applied"),
+            "promotions": sorted(promos, key=lambda p: p.get("status") != "queued")}
+
+
+@app.post("/api/reflect_session/{sid}")
+async def api_reflect_session(sid: str):
+    """Retroactively run the Reflector over a saved session trace -- learn from a session that
+    ran before D2M_LEARNING was on. No-op (with a reason) when the flag is off."""
+    if not learning.ENABLED:
+        return {"ok": False, "reason": "D2M_LEARNING is off", "lessons": []}
+    if not (LOG_DIR / f"session_{sid}.jsonl").exists():
+        return {"ok": False, "reason": f"no trace on file for {sid}", "lessons": []}
+    kept = await asyncio.to_thread(learning.reflect_session, sid)
+    return {"ok": True, "count": len(kept),
+            "lessons": [{"type": k["lesson_type"], "intent": (k.get("applies_to") or {}).get("intent"),
+                         "text": k["correction"] or k["mistake_or_insight"], "how": k.get("_how")}
+                        for k in kept]}
 
 
 @app.post("/api/explain")

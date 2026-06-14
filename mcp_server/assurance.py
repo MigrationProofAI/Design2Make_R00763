@@ -103,6 +103,20 @@ def check_sourcing(vendor_by_comp, P):
     return out
 
 
+def check_plant_extension(comp_ext: dict, plant: str, P: dict):
+    """comp_ext: {component: True|False|None extended-to-`plant`}. Flags BOM components NOT extended to
+    the plant -- a created component that isn't plant-extended can't be added to the plant BOM or
+    procured/produced there. None (the read failed) is NEVER flagged: we don't raise a false 'missing'.
+    This is the DETERMINISTIC promotion of the recurring correction 'first extend the materials' -- a
+    code check the board can't forget, vs a soft lesson recall might miss."""
+    c = P.get("plant_extension") or {}
+    if not c.get("required", True):
+        return []
+    sev = c.get("missing_severity", "error")
+    return [_F("plant_extension", comp, f"component not extended to plant {plant}", "P-PLANT", sev, "fail")
+            for comp, ext in comp_ext.items() if ext is False]
+
+
 def _summary(findings):
     sev = Counter(f["severity"] for f in findings if f["verdict"] != "pass")
     return {"error": sev.get("error", 0), "warning": sev.get("warning", 0),
@@ -126,6 +140,21 @@ def _pir_vendor(comp):
         d = json.loads(raw).get("d", {})
         rows = d.get("results", [d])
         return rows[0].get("Supplier") if rows else None
+    except (json.JSONDecodeError, ValueError, TypeError, KeyError):
+        return None
+
+
+def _plant_extended(comp, plant):
+    """True if `comp` is extended to `plant` (an A_ProductPlant row exists), False if confirmed absent,
+    None if the read failed (unknown -> never flagged). Reuses the proven explore_entity read tool."""
+    try:
+        raw = explore_entity("A_ProductPlant", filter=f"Product eq '{comp}' and Plant eq '{plant}'",
+                             service="API_PRODUCT_SRV")
+        if not isinstance(raw, str) or raw.startswith("SAP request failed"):
+            return None
+        d = json.loads(raw).get("d", {})
+        rows = d.get("results", [d]) if isinstance(d, dict) else []
+        return bool(rows and rows[0].get("Product"))
     except (json.JSONDecodeError, ValueError, TypeError, KeyError):
         return None
 
@@ -204,12 +233,13 @@ def assure_assembly(material: str, plant: str = "1710", components: list | None 
     facts["bom_source"] = (f"{len(bom)} component(s) read live from the BOM (MaterialBOM)"
                            if bom else "BOM read returned nothing -- using the passed list")
 
-    vendor_by_comp, comp_facts = {}, []
+    vendor_by_comp, comp_facts, comp_ext = {}, [], {}
     for c in comps:
         o = _read(c)
         if not o:
             findings.append(_F("master_data", c, "component material not found", "P-MD", "error", "fail"))
             continue
+        comp_ext[c] = _plant_extended(c, plant)   # deterministic: is this component on the plant?
         # LEAN component fact: only the judgment-relevant fields (the checks already ran on the full
         # object and produced FINDINGS; the board doesn't need weights/units/groups echoed back).
         # This is the single biggest repeated tool result -- keeping it to ~5 fields, not 11, matters
@@ -221,6 +251,7 @@ def assure_assembly(material: str, plant: str = "1710", components: list | None 
         if str(o.get("ProductType") or "").upper() in _BOUGHT:
             vendor_by_comp[c] = _pir_vendor(c)
     findings += check_sourcing(vendor_by_comp, P)
+    findings += check_plant_extension(comp_ext, plant, P)   # promoted from the 'extend first' correction
     facts["components"] = comp_facts
 
     return json.dumps({"material": material, "plant": plant, "facts": facts,

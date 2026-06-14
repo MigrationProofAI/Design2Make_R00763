@@ -53,3 +53,4 @@ appended by the `remember` tool when an agent confirms something non-obvious
 - The entity 'A_MaterialDocumentItem' in 'API_MATERIAL_DOCUMENT_SRV' has keys 'MaterialDocumentYear', 'MaterialDocument', and 'MaterialDocumentItem'.
 - Routing counter field is PLNAL in create_production_version.
 - CountryOfOrigin field is not in the code book.
+- Country of Origin must be explicitly set in the material master data for all materials to avoid policy violations.

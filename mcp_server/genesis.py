@@ -71,11 +71,17 @@ def _dossier(d: dict) -> str:
     for e in d["escalations"]:
         detail = e.get("why") or e.get("fact") or ""
         head += f"\n  ⚠ S7 ESCALATE {e['stage']}: {e['reason']}" + (f" ({detail})" if detail else "")
-    # Ship the agent the ROLLUP only -- the full per-stage `stages[]` (verbose policy/grounding/inputs)
-    # is ~27k tokens and the agent only needs verdict/confidence/escalations/decisions/cost. The full
-    # detail is durably in the sidecars (kg_instances.json + genesis_ledger.json), not lost.
-    slim = {k: v for k, v in d.items() if k != "stages"}
-    return head + "\n```json\n" + json.dumps(slim, indent=2) + "\n```"
+    # The agent needs the verdict/confidence/escalations/cost ABOVE + a one-line decisions roll-up; it
+    # does NOT need the full structured record inline. The old `\`\`\`json {slim}\`\`\`` block was ~11k chars
+    # (decisions + a duplicate of the escalations already in the head + reopen_plan) and piled up in the
+    # model context across turns. The full detail lives durably in the sidecars (kg_instances.json +
+    # genesis_ledger.json) and travels to the UI via the @@DATA@@ card -- so it is NOT lost here.
+    decisions = d.get("decisions") or []
+    if decisions:
+        head += "\n  decisions: " + "; ".join(
+            f"{x.get('stage', '?')}={x.get('decision') or x.get('outcome') or x.get('result') or '?'}"
+            if isinstance(x, dict) else str(x) for x in decisions)[:600]
+    return head
 
 
 def _discipline_summary(d: dict) -> dict:

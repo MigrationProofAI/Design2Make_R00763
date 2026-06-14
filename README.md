@@ -1,124 +1,62 @@
-# Design2Make
+# An ADK Agent integrated with MCP Client
 
-Turn a **real product** into **SAP S/4HANA master data + a production plan** — as one connected loop:
-**design → make → plan → expert review → fix → re-plan**.
+This web application was developed using Google ADK (Agent Development Kit) and MCP (Model Context Protocol). Specifically, the Agent relies on the Google ADK. A local MCP server instance, established using custom server code designed for cocktail data management, facilitates data retrieval. The web application acts as an MCP client to fetch cocktail information via this local server.
 
-Built on **Google ADK** (agents) + **MCP** (tools). The app is multimodal in (drop a photo of a
-disassembled product, or speak/type), creates the whole master-data set (finished good, components,
-purchase-info-records, costs, BOM, routing, production version), runs MRP, convenes a grounded expert
-board, and self-corrects — every write gated by an explicit, voice-or-click approval.
+Screenshot:
 
-> 🔒 **Private repo.** The SAP **NWRFC SDK** is bundled (`mcp_remote/nwrfcsdk/`) for the owner's own
-> cross-machine use — it is SAP-licensed, so **keep this repository private** (don't redistribute).
-> All `.env` files (SAP + OpenAI credentials) are gitignored and never committed; the app itself
-> holds no SAP creds — it only knows the two remote MCP URLs.
+![ADK Screenshot](https://storage.googleapis.com/github-repo/generative-ai/gemini/mcp/adk_app.png)
 
----
+This example demonstrates how you can chat with the app to retrieve cocktail details from [The Cocktail DB](https://www.thecocktaildb.com/) site using a local MCP server
 
-## Architecture
-
-```
-┌─ app (this repo root) ── FastAPI + ADK, :8000 ───────────────────────────┐
-│   React UI (served from static_v2/)                                       │
-│   local stdio MCP servers (mcp_server/): sap · make · vector · graph ·    │
-│       genesis · assurance · serper · cocktail   (OData REST, no RFC)       │
-└───────────────────────────────────────────────────────────────────────────┘
-        │ MCP over SSE (URLs only — no SAP creds in the app)
-        ▼
-┌─ mcp_remote/ ── separate RFC processes (carry SAP RFC creds + NWRFC SDK) ─┐
-│   sap_planning_mcp.py   :8001   MRP + demand        (NWRFC)                │
-│   sap_prodvers_mcp.py   :8002   production version  (MKAL/RFC)             │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-## Layout
-
-```
-Design2Make_R00763/
-├── run.sh / run.bat        ONE-COMMAND launch: RFC :8001 + :8002 + app :8000
-├── main.py                 FastAPI app + ADK runner (:8000)
-├── mcp_server/             local stdio MCP servers (OData REST)
-├── frontend/               React (Vite) source
-├── static_v2/              BUILT React bundle (committed → Python-only run)
-├── pyproject.toml, uv.lock
-├── env.example             copy → .env (app) and mcp_remote/.env (RFC)
-└── mcp_remote/             the two RFC MCP servers (:8001 / :8002)
-    ├── sap_planning_mcp.py · sap_prodvers_mcp.py · rfc_*.py
-    └── nwrfcsdk/           SAP NWRFC SDK — bundled (LINUX build; private repo)
-```
-
----
-
-## Prerequisites
-- **Python 3.13**. That's it — `run.bat` / `run.sh` **auto-install [`uv`](https://docs.astral.sh/uv/)**
-  (the dependency manager) if it's missing, then `uv sync` the deps.
-- An **OpenAI API key** (LLMs + embeddings + TTS).
-- For the RFC servers: access to an **SAP system over RFC**. **No `pyrfc`** — they call the NWRFC SDK
-  directly via `ctypes`. The SDK is **bundled** (`mcp_remote/nwrfcsdk/`, **Linux** `.so`) — run on
-  **Linux / WSL / Docker / a Linux VM**; on **Windows**, swap in the Windows NWRFC SDK (`.dll`s).
-- (Optional) **Node 18+** to rebuild the React UI; not needed to run (the bundle is committed).
-
-## Setup & run
-
-```bat
-git clone https://github.com/MigrationProofAI/Design2Make_R00763.git
-cd Design2Make_R00763
-
-REM fill in credentials — the ONLY manual step (creds are never in the repo):
-copy env.example .env                          REM  Linux: cp env.example .env
-copy env.example mcp_remote\.env               REM  Linux: cp env.example mcp_remote/.env
-notepad .env  &  notepad mcp_remote\.env       REM  OPENAI_API_KEY, SAP OData, SAP_RFC_* values
-
-REM then ONE command — installs uv if missing, uv sync, and starts :8001 + :8002 + :8000:
-run.bat                                        REM  Linux: ./run.sh
-```
-
-Then open **http://localhost:8000**. Search, genesis, the board, the tour/demo and screen recording
-all work **without** the RFC servers; only **MRP / demand / production-version** need them.
-
-> Prefer to run `uv sync` yourself first? Install uv once:
-> `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"` (Windows) or
-> `curl -LsSf https://astral.sh/uv/install.sh | sh` (Linux) — then `uv sync` works.
-
-## Try it — build a laptop's master data
-
-With `:8000` open, paste this into the chat to **genesis** the ASUS ROG Laptop — a FERT plus 10 bought
-components, each with a PIR + cost, then the BOM, routing, and production version — with per-component
-cost prices:
-
-> Build the full ASUS ROG Laptop assembly in plant 1710 as ONE genesis run, with these component
-> costs in the spec (all bought from vendor 17300001, qty 1 each): Panel Kit 120, Keyboard 35,
-> CD-ROM 18, Motherboard 240, USB/MB Cable 6, USB Board 22, Left Cooling Fan 14, Right Cooling Fan 14,
-> Audio Board 19, Power Board 28. Show me the preview, then I'll confirm.
-
-It returns a **preview** (nothing written) — review the Genesis card on the right, then reply
-**"yes, confirm creation"** (or click the approval gate). Any component that already exists by meaning
-(semantic match ≥ 0.92) is **reused** instead of re-created. Prices use the default currency
-(`SAP_CURRENCY`); add e.g. *"in GBP"* to force one. Genesis runs over **OData** (no RFC) — only the
-final production-version bind uses `:8002`. Afterwards you can ask it to **run MRP** on the new FERT.
-
-<details><summary>Start things by hand instead of <code>run.sh</code></summary>
+## Create & Activate Virtual Environment (Recommended)
 
 ```bash
-export SAPNWRFC_HOME="$PWD/mcp_remote/nwrfcsdk"
-export LD_LIBRARY_PATH="$SAPNWRFC_HOME/lib:$LD_LIBRARY_PATH"
-( cd mcp_remote && MCP_PORT=8001 python sap_planning_mcp.py ) &
-( cd mcp_remote && MCP_PORT=8002 python sap_prodvers_mcp.py ) &
-uv run main.py
+python -m venv .venv
+source .venv/bin/activate
 ```
-</details>
 
-### Rebuild the UI (optional)
+## Install ADK
+
 ```bash
-npm --prefix frontend install
-npm --prefix frontend run build     # → static_v2/
+pip install .
 ```
 
----
+Project Structure
 
-## Notes
-- **Destructive actions** (genesis create, run MRP, create demand, production version) are
-  **confirm-gated** — nothing writes to SAP without explicit approval (click or voice).
-- The Conductor (boardroom chair) runs on `gpt-4o`; every other agent runs on a cheap model.
-- First semantic search builds the embedding index (`index_materials`); created materials are
-  written back so duplicates are caught on the next run.
+```bash
+your_project_folder/  # Project folder
+|── adk_mcp_app
+    ├── main.py
+    ├── .env
+    ├── mcp_server
+    │   └── cocktail.py
+    ├── README.md
+    ├── pyproject.toml
+    ├── uv.lock
+    └── static
+        └── index.html
+```
+
+## Run the app
+
+Start the Fast API: Run the following command within the `adk_mcp_app` folder
+
+- Create a .env file with the following contents:
+
+```bash
+# Choose Model Backend: 0 -> Gemini Developer API, 1 -> Vertex AI
+GOOGLE_GENAI_USE_VERTEXAI=1
+
+# Gemini Developer API backend config
+GOOGLE_API_KEY=YOUR_VALUE_HERE
+
+# Vertex AI backend config
+GOOGLE_CLOUD_PROJECT="<your project id>"
+GOOGLE_CLOUD_LOCATION="us-central1"
+```
+
+- Run the below command to start the app:
+
+```bash
+uvicorn main:app --reload
+```

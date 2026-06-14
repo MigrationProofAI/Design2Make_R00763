@@ -74,6 +74,36 @@ def _sap_get(path: str, extra_params: dict | None = None) -> str:
         return f"SAP request failed: {e}"
 
 
+def _cap_result(raw: str, *, max_chars: int, label: str = "") -> str:
+    """Bound a tool result so a single fat OData read can't blow the model's context
+    window (a few 45k-char query_sap rows piled up to 761k tokens and pinned the trimmer).
+    For a v2 collection ({"d":{"results":[...]}}) it keeps as many WHOLE rows as fit the
+    budget (valid JSON + an honest count); a single oversized object is hard-truncated with
+    a note. The agent can narrow with $select / $filter / a smaller top to see more."""
+    if not raw or len(raw) <= max_chars or raw.startswith("SAP request failed"):
+        return raw
+    try:                                              # keep whole rows for a collection
+        obj = json.loads(raw)
+        d = obj.get("d", {}) if isinstance(obj, dict) else {}
+        rows = d.get("results") if isinstance(d, dict) else None
+        if isinstance(rows, list) and rows:
+            kept, size = [], 0
+            for r in rows:
+                rs = len(json.dumps(r))
+                if kept and size + rs > max_chars:
+                    break
+                kept.append(r); size += rs
+            if len(kept) < len(rows):
+                d["results"] = kept
+                d["_truncated"] = (f"showing {len(kept)} of {len(rows)} rows (capped to ~{max_chars} "
+                                   f"chars to fit context); add $filter/$select or a smaller top for more")
+                return json.dumps(obj)
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return raw[:max_chars] + (f'\n...[{label or "result"} truncated to {max_chars} chars to fit the '
+                              f'model context window; use $select to fetch only the fields you need]')
+
+
 PRODUCT_SRV = "/sap/opu/odata/sap/API_PRODUCT_SRV"
 
 # --- Value-mapping layer -------------------------------------------------
@@ -656,12 +686,12 @@ def explore_entity(entity: str, filter: str = "", keys: dict | None = None,
             base["$filter"] = filter
 
     if not expand:
-        return _sap_get(url, base)
+        return _cap_result(_sap_get(url, base), max_chars=14000, label="explore_entity")
 
     # 1) try the whole $expand in one call (works for entities with a few navs).
     one = _sap_get(url, {**base, "$expand": ",".join(expand)})
     if one[:1] == "{" and '"error"' not in one[:400] and not one.startswith("SAP request failed"):
-        return one
+        return _cap_result(one, max_chars=14000, label="explore_entity")
 
     # 2) Rejected -- entities with MANY navs (e.g. A_Product's 13) overflow SAP's $expand limit,
     #    especially as a collection ($top + filter). Fall back to base + ONE expand per nav,
@@ -680,7 +710,7 @@ def explore_entity(entity: str, filter: str = "", keys: dict | None = None,
                     targets[i][nv] = srow[nv]
         except (json.JSONDecodeError, KeyError, TypeError):
             pass                                         # skip a nav that won't expand
-    return json.dumps({"d": d}, indent=2)
+    return _cap_result(json.dumps({"d": d}, indent=2), max_chars=14000, label="explore_entity")
 
 
 @mcp.tool()
@@ -693,15 +723,46 @@ def list_materials(top: int = 5) -> str:
     return _sap_get("/sap/opu/odata/sap/API_PRODUCT_SRV/A_Product", {"$top": top})
 
 
+# Lean header fields for get_material -- the ones agents actually use to confirm a
+# material exists and plan a change. Returning only these keeps a single read small,
+# so a turn that reads MANY materials (e.g. extending a BOM's components to a plant,
+# which read 28 materials in one loop and pressured the context window) stays lean.
+_GET_MATERIAL_LEAN_FIELDS = (
+    "Product", "ProductType", "BaseUnit", "ProductGroup", "IndustrySector",
+    "CrossPlantStatus", "Division", "GrossWeight", "NetWeight", "WeightUnit",
+    "ProductStandardID", "ItemCategoryGroup", "PurchaseOrderQuantityUnit",
+    "CountryOfOrigin",        # assurance.py reads this to judge CoO; omitting it made every
+                             # Compliance check false-flag "CountryOfOrigin not specified".
+    "CreationDate", "LastChangeDate",
+)
+
+
 @mcp.tool()
-def get_material(material_id: str) -> str:
+def get_material(material_id: str, full: bool = False) -> str:
     """Fetch a single material/product master record by ID from SAP S/4HANA.
+
+    Returns a LEAN set of the most-used header fields by default, so reading many
+    materials in one turn (e.g. extending a BOM's components to a plant) stays well
+    within the model's context window. Pass full=True only when you need a header
+    field outside the lean set (use find_field/list_fields to discover field names).
 
     Args:
         material_id: The exact material/product number, e.g. "21".
+        full: True -> the complete entity (every header field). Default False (lean).
     """
     # Single-entity read by key — no $top (invalid on a single entity)
-    return _sap_get(f"/sap/opu/odata/sap/API_PRODUCT_SRV/A_Product('{material_id}')")
+    raw = _sap_get(f"/sap/opu/odata/sap/API_PRODUCT_SRV/A_Product('{material_id}')")
+    if full or raw.startswith("SAP request failed"):
+        return raw
+    try:                                          # prune to the lean set; never break a read
+        d = json.loads(raw).get("d", {}) or {}
+        lean = {k: d[k] for k in _GET_MATERIAL_LEAN_FIELDS if k in d}
+        if not lean:                              # unexpected shape -> return raw untouched
+            return raw
+        lean["_note"] = "lean view -- call get_material(id, full=true) for all header fields"
+        return json.dumps({"d": lean})
+    except (ValueError, TypeError, AttributeError):
+        return raw
 
 
 @mcp.tool()
@@ -712,8 +773,11 @@ def query_sap(path: str, top: int = 5) -> str:
         path: OData path after the host, e.g.
               "/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner"
         top:  Maximum number of records to return (default 5).
+
+    Tip: rows are FULL entities and can be large. If you only need a few fields, add
+    "$select=Field1,Field2" to the path -- the result is capped to keep context lean.
     """
-    return _sap_get(path, {"$top": top})
+    return _cap_result(_sap_get(path, {"$top": top}), max_chars=12000, label="query_sap")
 
 # ---- writes: CSRF + confirm-gated create / update ---------------------------
 _PRODUCT_SRV = f"{SAP_BASE_URL}/sap/opu/odata/sap/API_PRODUCT_SRV"

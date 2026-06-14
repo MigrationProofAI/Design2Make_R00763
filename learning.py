@@ -46,6 +46,9 @@ _EMBED_MODEL = "text-embedding-3-small"
 _REFLECT_MODEL = os.getenv("D2M_LEARNING_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
 RECALL_TOKEN_CAP = int(os.getenv("D2M_LEARNING_TOKEN_CAP", "300"))
 _DUP_SIM = 0.93                          # a new lesson this close to an existing one just bumps recurrence
+_RECALL_FLOOR = float(os.getenv("D2M_RECALL_FLOOR", "0.38"))   # cosine floor: only inject genuinely relevant
+# lessons. 0.45 starved the boardroom (its lessons score 0.43-0.46 vs board queries) while negatives sit at
+# 0.20-0.30; intent-scoping (the pool filter) is what guards cross-intent leakage, so the floor can be lower.
 
 _client = None                          # lazy -- importing this module must never need a key
 _LESSON_TYPES = {"process", "method", "fact"}
@@ -261,6 +264,69 @@ def reflect(intent: str, steps: list[dict], trigger: str = "manual") -> list[dic
     return kept
 
 
+def reflect_session(session_id: str, logdir: str = "logs") -> list[dict]:
+    """Retroactively run the Reflector over a SAVED session trace (logs/session_<id>.jsonl) -- so we
+    can learn from sessions that ran before capture was enabled. Builds a whole-session digest (one
+    block per turn, not just the last 60 steps) so breadth isn't lost."""
+    if not ENABLED:
+        return []
+    path = Path(logdir) / f"session_{session_id}.jsonl"
+    if not path.exists():
+        logging.warning(f"[learning] reflect_session: no trace at {path}")
+        return []
+    turns, cur = [], None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if "input" in r:
+            cur = {"intent": r.get("intent", ""), "text": (r.get("input", {}) or {}).get("text", ""),
+                   "tools": [], "notes": []}
+            turns.append(cur)
+        elif cur is not None:
+            k = r.get("kind")
+            if k == "tool_call":
+                cur["tools"].append(r.get("tool"))
+            elif k == "tool_result":
+                res = str(r.get("result", ""))
+                if any(w in res.lower() for w in ("error", "fail", "blocked", "not found", "cannot",
+                                                  "missing", "duplicate", "invalid")):
+                    cur["notes"].append(f"{r.get('tool', '')}: {res[:120]}")
+    lines = []
+    for i, t in enumerate(turns):
+        lines.append(f"TURN {i} [{t['intent']}] user: {t['text'][:120]}")
+        if t["tools"]:
+            lines.append("  tools: " + ", ".join(str(x) for x in t["tools"][:10]))
+        for n in t["notes"][:3]:
+            lines.append("  ! " + n)
+    digest = "\n".join(lines)[:7000] or "(empty session)"
+    _load()
+    dominant = max((t["intent"] for t in turns),
+                   key=lambda x: sum(1 for t in turns if t["intent"] == x), default="session") if turns else "session"
+    prompt = _REFLECT_PROMPT.replace("{intent}", dominant).replace("{trace}", digest)
+    try:
+        resp = _oai().chat.completions.create(
+            model=_REFLECT_MODEL, temperature=0.2, max_tokens=900,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}])
+        items = json.loads(resp.choices[0].message.content).get("lessons", [])
+    except Exception as e:
+        logging.warning(f"[learning] reflect_session failed: {e}")
+        return []
+    kept = []
+    for raw in (items or [])[:6]:
+        le = _validate(raw, source="reflector", default_intent=dominant)
+        if le:
+            stored, how = _dedup_or_add(le)
+            kept.append({**stored, "_how": how})
+    logging.info(f"[learning] reflect_session({session_id}): {len(kept)} lesson(s)")
+    return kept
+
+
 _CORRECTION_RE = re.compile(r"\b(no|nope|wrong|incorrect|not right|should be|that's not|isn't|"
                             r"shouldn't|don't|do not|actually it's|it is not|that is wrong)\b", re.I)
 _ENTITY_RE = re.compile(r"\b([A-Z]{2,}\d{2,}|\d{4,}|[A-Z][A-Za-z]+(?:\s[A-Z][A-Za-z]+)?)\b")
@@ -299,8 +365,11 @@ def recall(intent: str, query: str, k: int = 3) -> list[dict]:
     active = [le for le in _lessons if le.get("status") == "active"]
     if not active:
         return []
-    pool = [le for le in active if not le["applies_to"].get("intent")
-            or le["applies_to"]["intent"] == intent] or active
+    # intent-scoped: a lesson surfaces only on its own intent, or if it carries no intent tag (universal).
+    # No "or active" fallback -- otherwise an unrelated intent sees every lesson and recall becomes always-on.
+    pool = [le for le in active if le["applies_to"].get("intent") in (intent, None, "")]
+    if not pool:
+        return []
     q = (intent + " " + (query or "")).strip()
     if _FAISS and _index is not None and _index.ntotal:
         qv = _embed([q])
@@ -311,7 +380,7 @@ def recall(intent: str, query: str, k: int = 3) -> list[dict]:
                 continue
             seen.add(i)
             le = _lessons[i]
-            if le.get("status") == "active" and le in pool:
+            if float(s) >= _RECALL_FLOOR and le.get("status") == "active" and le in pool:  # relevance gate
                 ranked.append(le)
             if len(ranked) >= k:
                 break
@@ -394,6 +463,32 @@ def list_promotions() -> list[dict]:
             except json.JSONDecodeError:
                 pass
     return out
+
+
+def apply_promotion(promo_id: str, artifact_ref: str) -> dict:
+    """HUMAN-GATED last mile: mark a queued promotion APPLIED (a deterministic check/guard now exists
+    at `artifact_ref`) and RETIRE the underlying soft lesson, so it stops surfacing in fuzzy recall --
+    it's now a hard check that can't be forgotten or missed by a low similarity score. Rewrites the
+    queue + lessons file. Returns the updated promotion ({} if not found/already applied)."""
+    promos = list_promotions()
+    target = next((p for p in promos if p.get("id") == promo_id and p.get("status") == "queued"), None)
+    if not target:
+        return {}
+    target["status"] = "applied"
+    target["artifact_ref"] = artifact_ref
+    target["applied_ts"] = _now()
+    with PROMO_FILE.open("w", encoding="utf-8") as f:
+        for p in promos:
+            f.write(json.dumps(p, ensure_ascii=False) + "\n")
+    _load()                                   # retire the soft lesson -> recall (status=='active') drops it
+    for le in _lessons:
+        if le.get("id") == target.get("lesson_id"):
+            le["status"] = "retired"
+            le["retired_reason"] = f"promoted to deterministic check: {artifact_ref}"
+    _rewrite()
+    logging.info(f"[learning] promotion {promo_id} APPLIED -> {artifact_ref}; "
+                 f"lesson {target.get('lesson_id')} retired (now a hard check)")
+    return target
 
 
 # ---- ledger (proof) --------------------------------------------------------

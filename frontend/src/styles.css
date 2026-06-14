@@ -1,30 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,600&family=Inter:wght@400;450;500;600;700&display=swap');
 /* Design2Make -- editorial "paper + terminal" theme, after _review_panel.png.
    Warm cream paper, serif titles, monospace small-caps headers, hairline rules,
    restrained accents (near-black approve, red reject, green auto, amber retry),
    dark terminal blocks for structured records. Light is primary; dark is the toggle. */
 :root {
-  --bg: #efebe1; --bg-2: #e7e2d6; --panel: #faf8f1; --panel-2: #f3f0e6;
-  --line: #dcd6c6; --line-2: #cec7b3;
-  --ink: #211e17; --ink-2: #6d6655; --ink-3: #9a9281;
-  --accent: #2f5fd0; --accent-soft: #e8edfb;
-  --approve: #211e17; --reject: #b23a2c; --auto: #2f7d4f; --retry: #bd7c1a;
+  --bg: #f1ede3; --bg-2: #e9e4d7; --panel: #fbfaf5; --panel-2: #f4f1e8;
+  --line: #e2dccb; --line-2: #d2cbb7;
+  --ink: #1f1c16; --ink-2: #6a6353; --ink-3: #9c947f;
+  --accent: #c2613f; --accent-soft: #f5e7df;
+  --approve: #1f1c16; --reject: #b23a2c; --auto: #2f7d4f; --retry: #bd7c1a;
   --code-bg: #1b1a16; --code-ink: #d7d3c5; --code-key: #9fcf8f; --code-num: #e0b06a;
-  --user-bg: #211e17; --user-ink: #f3efe4;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --user-bg: #1f1c16; --user-ink: #f3efe4;
+  --serif: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --radius: 8px; --ease: cubic-bezier(.22,.61,.36,1);
+  --radius: 10px; --ease: cubic-bezier(.22,.61,.36,1);
   --route-search:#6d6655; --route-create_change:#7c3aed; --route-make:#b83280;
   --route-genesis:#c2620f; --route-planning:#0e7490; --route-boardroom:#6d28d9; --route-validate:#2f7d4f;
+  /* cinematic layer */
+  --aura-1: rgba(204,120,92,.09); --aura-2: rgba(224,176,106,.08); --aura-3: rgba(150,128,198,.05);
+  --vignette: rgba(118,92,58,.05); --hi: rgba(255,255,255,.6); --shadow: rgba(58,44,30,.38); --glow: rgba(194,97,63,.36);
 }
 :root[data-theme="dark"] {
-  --bg: #15130e; --bg-2: #1a1711; --panel: #1d1a13; --panel-2: #17140e;
-  --line: #2c281e; --line-2: #393428;
-  --ink: #ece6d6; --ink-2: #a79e87; --ink-3: #746c58;
-  --accent: #7aa2f7; --accent-soft: #1b233a;
-  --approve: #ece6d6; --reject: #e0695b; --auto: #6cc488; --retry: #d8a24c;
-  --code-bg: #100e0a; --code-ink: #cec9b8; --code-key: #9fcf8f; --code-num: #e0b06a;
-  --user-bg: #2a2519; --user-ink: #f1ece0;
+  --bg: #141009; --bg-2: #1a150d; --panel: #1f1a12; --panel-2: #191510;
+  --line: #322c20; --line-2: #423a2a;
+  --ink: #efe8d8; --ink-2: #b0a68d; --ink-3: #7a715b;
+  --accent: #e2895f; --accent-soft: #3a271d;
+  --approve: #efe8d8; --reject: #e0695b; --auto: #6cc488; --retry: #d8a24c;
+  --code-bg: #0e0b07; --code-ink: #cec9b8; --code-key: #9fcf8f; --code-num: #e0b06a;
+  --user-bg: #2c2618; --user-ink: #f1ece0;
+  --aura-1: rgba(214,126,96,.13); --aura-2: rgba(220,150,80,.09); --aura-3: rgba(128,108,190,.10);
+  --vignette: rgba(0,0,0,.42); --hi: rgba(255,255,255,.05); --shadow: rgba(0,0,0,.5); --glow: rgba(226,137,95,.46);
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -60,14 +66,17 @@ button { font-family: inherit; }
 .pane.tour-hi { box-shadow: inset 0 0 0 2px var(--retry); }
 /* element-level spotlight: glow exactly the thing being narrated */
 .spot-on { border-radius: 8px; outline: 2px solid var(--accent); outline-offset: 3px;
-  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 16px rgba(47,95,208,.35); animation: spotpulse 1.5s var(--ease) infinite; }
-@keyframes spotpulse { 0%,100% { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 12px rgba(47,95,208,.28); }
-  50% { box-shadow: 0 0 0 6px var(--accent-soft), 0 0 22px rgba(47,95,208,.50); } }
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 16px var(--glow); animation: spotpulse 1.5s var(--ease) infinite; }
+@keyframes spotpulse { 0%,100% { box-shadow: 0 0 0 4px var(--accent-soft), 0 0 12px var(--glow); }
+  50% { box-shadow: 0 0 0 6px var(--accent-soft), 0 0 26px var(--glow); } }
 .compose-inputs { display: inline-flex; gap: 8px; border-radius: 11px; }
 .pane-h { font-family: var(--mono); padding: 12px 20px; font-size: 11px; font-weight: 600; letter-spacing: .12em;
   text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--line); background: var(--panel); }
 .pane-body { flex: 1; overflow-y: auto; overflow-x: hidden; min-width: 0; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
-.pane-body > * { min-width: 0; max-width: 100%; }
+/* flex-shrink:0 is essential: in a flex COLUMN the children default to shrink:1, so once the cards/
+   messages exceed the viewport flexbox squashes them and they overlap ("fall on top of each other")
+   instead of letting the pane scroll. Pin their height; the pane-body's overflow-y handles the rest. */
+.pane-body > * { min-width: 0; max-width: 100%; flex-shrink: 0; }
 .empty-hint { color: var(--ink-3); font-size: 12.5px; text-align: center; margin-top: 30px; font-family: var(--mono); letter-spacing: .02em; }
 
 /* ---- chat ---- */
@@ -85,6 +94,8 @@ button { font-family: inherit; }
 .intent-chip { display: inline-block; font-family: var(--mono); font-size: 9.5px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .06em; color: #fff; padding: 2px 8px; border-radius: 5px; margin-bottom: 6px; }
 .msg-img { max-width: 220px; border-radius: 8px; border: 1px solid var(--line-2); margin-bottom: 6px; display: block; }
+.msg-imgmark { display: inline-block; font-family: var(--mono); font-size: 10.5px; color: var(--ink-2);
+  background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 3px 9px; margin-bottom: 6px; }
 .msg-ts { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-top: 4px; }
 .status-line { align-self: center; color: var(--ink-3); font-size: 12px; font-style: italic; }
 .thinking { align-self: flex-start; display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: 13px; font-style: italic; }
@@ -237,3 +248,51 @@ button { font-family: inherit; }
 .chip-st { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
 .chip-st.ok { background: rgba(47,125,79,.16); color: var(--auto); }
 .chip-st.failed { background: var(--reject); color: #fff; }
+
+/* ════════════════════  ✦  REFINED CLAUDE LAYER  ✦  ════════════════════
+   Warm clay palette + Fraunces + a whisper of depth. Calm and clean, not heavy
+   glass — Claude's aesthetic is restraint. A pure visual layer; structure intact. */
+
+/* — a faint, static warm glow at the top (no drift) + the gentlest vignette — */
+body::before { content:""; position:fixed; inset:0; z-index:-2; pointer-events:none;
+  background:
+    radial-gradient(62% 36% at 50% -10%, var(--aura-2), transparent 70%),
+    radial-gradient(34% 38% at 12% 2%, var(--aura-1), transparent 72%),
+    radial-gradient(38% 42% at 90% 4%, var(--aura-3), transparent 72%); }
+body::after { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background: radial-gradient(132% 122% at 50% -14%, transparent 64%, var(--vignette) 100%); }
+
+/* — glass ONLY on the topbar (a thin, tasteful strip); panes stay solid + readable — */
+.topbar { background: color-mix(in srgb, var(--panel) 84%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(135%); backdrop-filter: blur(14px) saturate(135%);
+  border-bottom-color: color-mix(in srgb, var(--line) 72%, transparent);
+  box-shadow: 0 1px 0 var(--hi) inset, 0 5px 16px -16px var(--shadow); position:relative; z-index:6; }
+.pane { background: var(--panel); }
+
+/* — brand: gradient wordmark + a soft (non-pulsing) dot glow — */
+.brand .wordmark { background: linear-gradient(100deg, var(--ink) 35%, var(--accent) 135%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  font-weight: 600; letter-spacing: .005em; }
+.brand .dot { background: var(--accent); box-shadow: 0 0 8px var(--glow); }
+
+/* — a whisper of depth on the floating surfaces (subtle; no hover lift) — */
+.bubble, .act-turn, .data-card, .gate, .modal {
+  box-shadow: 0 1px 0 var(--hi) inset, 0 8px 22px -20px var(--shadow); }
+.act-turn, .data-card { transition: border-color .2s var(--ease), box-shadow .2s var(--ease); }
+.act-turn:hover, .data-card:hover { border-color: color-mix(in srgb, var(--accent) 26%, var(--line)); }
+
+/* — coral send + focus — */
+.send { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #8c3f23));
+  color: #fff; box-shadow: 0 6px 16px -11px var(--glow); }
+:root[data-theme="dark"] .send { color: #1a120c; }
+.send:hover { opacity: 1; filter: brightness(1.05); }
+.composer input:focus { border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent); }
+
+/* — slim warm scrollbars — */
+.pane-body::-webkit-scrollbar, .sess-list::-webkit-scrollbar { width: 10px; }
+.pane-body::-webkit-scrollbar-thumb, .sess-list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--ink-3) 40%, transparent); border-radius: 7px;
+  border: 3px solid transparent; background-clip: padding-box; }
+.pane-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 50%, transparent); background-clip: padding-box; }

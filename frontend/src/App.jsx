@@ -115,7 +115,7 @@ export default function App() {
     setMessages([]); setActivity([]); setData([]);
     try {
       const turns = await (await fetch("/api/sessions/" + id + "/events")).json();
-      setMessages(turns.map((t) => ({ role: t.role === "user" ? "user" : "agent", text: t.text, ts: "" })));
+      setMessages(turns.map((t) => ({ role: t.role === "user" ? "user" : "agent", text: t.text, image: t.image, ts: "" })));
     } catch (e) {}
     try {
       const tr = await (await fetch("/api/sessions/" + id + "/trace")).json();
@@ -378,7 +378,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand" data-spot="brand"><span className="dot" /> Design2Make <span className="sub">· SAP master-data &amp; planning</span></div>
+        <div className="brand" data-spot="brand"><span className="dot" /> <span className="wordmark">Design2Make</span> <span className="sub">· SAP master-data &amp; planning</span></div>
         <div className="spacer" />
         <span className="sess-code">{sessionId}</span>
         <button className="mini" onClick={() => setSessionsOpen(true)}>🗂 Sessions</button>
@@ -444,7 +444,7 @@ function ChatMsg({ m }) {
   return (
     <div className={"msg " + m.role}>
       {m.role === "agent" && m.intent && <span className="intent-chip" style={{ background: `var(--route-${m.intent}, #475569)` }}>{m.intent}</span>}
-      {m.image && <img className="msg-img" src={m.image} alt="" />}
+      {m.image === true ? <div className="msg-imgmark">🖼 image attached</div> : (m.image && <img className="msg-img" src={m.image} alt="" />)}
       <div className="bubble">{m.role === "agent" ? <ReactMarkdown>{m.text}</ReactMarkdown> : m.text}</div>
       {m.ts && <div className="msg-ts">{m.ts}</div>}
     </div>
